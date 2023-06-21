@@ -491,7 +491,7 @@ function createBaseLayers() {
         }
 
         const rainviewerRadar = new ol.layer.Tile({
-            name: 'rainviewer',
+            name: 'rainviewer_radar',
             title: 'RainViewer Radar',
             type: 'overlay',
             opacity: 0.35,
@@ -516,7 +516,7 @@ function createBaseLayers() {
         
 
         const rainviewerClouds = new ol.layer.Tile({
-            name: 'rainviewer',
+            name: 'rainviewer_clouds',
             title: 'RainViewer Clouds',
             type: 'overlay',
             opacity: 0.35,
