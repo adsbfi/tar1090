@@ -25,6 +25,20 @@ function createBaseLayers() {
     const tileTransition = onMobile ? 0 : 150;
 
     if (loStore['customTiles'] != undefined) {
+      if (loStore['customTileType'] == "overlay"){
+        custom_layers.push(new ol.layer.Tile({
+            source: new ol.source.OSM({
+                "url" : loStore['customTiles'],
+                transition: tileTransition,
+            }),
+            name: 'custom_tiles',
+            title: 'Custom tiles',
+            type: 'overlay',
+            opacity: 0.9,
+            visible: false,
+            zIndex: 99,
+        }));
+      } else {
         custom_layers.push(new ol.layer.Tile({
             source: new ol.source.OSM({
                 "url" : loStore['customTiles'],
@@ -35,6 +49,7 @@ function createBaseLayers() {
             title: 'Custom tiles',
             type: 'base',
         }));
+      }
     }
     /*
     world.push(new ol.layer.Tile({

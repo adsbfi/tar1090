@@ -214,6 +214,11 @@ if (customTiles)
     loStore['customTiles'] = customTiles;
 if (customTiles == 'remove')
     loStore.removeItem('customTiles');
+    loStore.removeItem('customTileType');
+
+const customTileType = usp.get('customTileType');
+if (customTileType)
+  loStore['customTileType'] = customTileType;
 
 const bingKey = usp.get('BingMapsAPIKey');
 if (bingKey)
