@@ -7,6 +7,10 @@
 
 g.planes        = {};
 g.planesOrdered = [];
+g.route_cache = [];
+g.route_check_array = [];
+g.route_check_in_flight = false;
+g.route_cache_timer = new Date().getTime() / 1000 + 1; // one second from now
 
 // Define our global variables
 let tabHidden = false;
@@ -1517,6 +1521,18 @@ jQuery('#selected_altitude_geom1')
             refreshSelected();
         }
     });
+    if (useRouteAPI) {
+        new Toggle({
+            key: "useRouteAPI",
+            display: "Lookup route",
+            container: "#settingsRight",
+            init: useRouteAPI,
+            setState: function(state) {
+                useRouteAPI = state;
+            }
+        });
+    }
+
 
     new Toggle({
         key: "enableInfoblock",
@@ -1591,6 +1607,13 @@ jQuery('#selected_altitude_geom1')
             return;
         }
         */
+    }
+    if (imageConfigLink != "") {
+        let host = window.location.hostname;
+        let configLink = imageConfigLink.replace('HOSTNAME', host);
+        jQuery('#imageConfigLink').attr('href',configLink)
+        jQuery('#imageConfigLink').text(imageConfigText)
+        jQuery('#imageConfigHeader').show();
     }
 }
 
@@ -3100,6 +3123,16 @@ function refreshSelected() {
         jQuery('#selected_squawk2').updateText(selected.squawk);
     }
 
+    if (useRouteAPI) {
+        jQuery('#routeRow').show();
+        if (selected.routeString) {
+            jQuery('#selected_route').updateText(selected.routeString);
+        } else {
+            jQuery('#selected_route').updateText('n/a');
+        }
+    } else {
+        jQuery('#routeRow').hide();
+    }
     let magResult = null;
 
     if (geoMag && selected.position != null) {
@@ -3524,6 +3557,14 @@ function refreshFeatures() {
         },
         html: flightawareLinks,
         text: 'Callsign' };
+    if (useRouteAPI) {
+        cols.route = {
+            sort: function () { sortBy('route', compareAlpha, function(x) { return x.routeString }); },
+            value: function(plane) {
+                return ((useRouteAPI && plane.routeString) || '');
+            },
+            text: 'Route' };
+    }
     cols.registration = {
         sort: function () { sortBy('registration', compareAlpha, function(x) { return x.registration; }); },
         value: function(plane) { return (flightawareLinks ? getFlightAwareIdentLink(plane.registration, plane.registration) : (plane.registration ? plane.registration : "")); },
@@ -6541,7 +6582,7 @@ function drawUpintheair() {
         let color = range_outline_color;
         if (range_outline_colored_by_altitude) {
             let colorArr = altitudeColor(altitude);
-            color = 'hsl(' + colorArr[0].toFixed(0) + ',' + colorArr[1].toFixed(0) + '%,' + colorArr[2].toFixed(0) + '%)';
+            color = 'hsla(' + colorArr[0].toFixed(0) + ',' + colorArr[1].toFixed(0) + '%,' + colorArr[2].toFixed(0) + '%,' + range_outline_alpha + ')';
         }
         let outlineStyle = new ol.style.Style({
             fill: null,
@@ -7824,7 +7865,7 @@ function testUnhide() {
     window.document.dispatchEvent(new Event('visibilitychange'));
 }
 
-function selectClosest() {
+function autoSelectClosest() {
     if (!loadFinished)
         return;
     let closest = null;
@@ -7836,7 +7877,11 @@ function selectClosest() {
             closest = plane;
         if (plane.position == null || !plane.visible)
             continue;
-        const dist = ol.sphere.getDistance([CenterLon, CenterLat], plane.position);
+        let refLoc = [CenterLon, CenterLat];
+        if (autoselectCoords && autoselectCoords.length == 2) {
+            refLoc = [ autoselectCoords[1], autoselectCoords[0] ];
+        }
+        const dist = ol.sphere.getDistance(refLoc, plane.position);
         if (dist == null || isNaN(dist))
             continue;
         if (closestDistance == null || dist < closestDistance) {
@@ -7852,8 +7897,8 @@ function setAutoselect() {
     clearInterval(timers.autoselect);
     if (!autoselect)
         return;
-    timers.autoselect = window.setInterval(selectClosest, 5000);
-    selectClosest();
+    timers.autoselect = window.setInterval(autoSelectClosest, 5000);
+    autoSelectClosest();
 }
 function registrationLink(plane) {
     if (plane.country === 'Brazil') {

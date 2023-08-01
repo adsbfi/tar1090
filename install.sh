@@ -1,33 +1,39 @@
 #!/bin/bash
+# shellcheck shell=bash disable=SC2016
+
 
 set -e
 trap 'echo "[ERROR] Error in line $LINENO when executing: $BASH_COMMAND"' ERR
 renice 10 $$
 
-if [ -d /bup ]; then
-    echo Talk to @PIL. Dieses Skript ist nichts fuer dich!
-    exit 1
-fi
-
-
-srcdir=/run/dump1090-fa
+srcdir=/run/readsb
 repo="https://github.com/adsbfi/tar1090"
 db_repo="https://github.com/adsbfi/tar1090-db"
+
+# optional command line options for this install script
+# $1: data source directory
+# $2: web path, default is "tar1090", use "webroot" to place the install at /
+# $3: specify install path
+# $4: specify git path as source instead of pulling from git
+
 ipath=/usr/local/share/tar1090
+if [[ -n "$3" ]]; then ipath="$3"; fi
+
+if [[ -n "$4" ]] && grep -qs -e 'tar1090' "$4/install.sh"; then git_source="$4"; fi
+
 lighttpd=no
 nginx=no
+function useSystemd () { command -v systemd &>/dev/null; }
 
-mkdir -p $ipath
-mkdir -p $ipath/aircraft_sil
+mkdir -p "$ipath"
 
-
-if ! id -u tar1090 &>/dev/null
+if useSystemd && ! id -u tar1090 &>/dev/null
 then
-    adduser --system --home $ipath --no-create-home --quiet tar1090 || adduser --system --home-dir $ipath --no-create-home tar1090
+    adduser --system --home "$ipath" --no-create-home --quiet tar1090 || adduser --system --home-dir "$ipath" --no-create-home tar1090
 fi
 
 # terminate with /
-command_package="git git/jq jq/wget wget"
+command_package="git git/jq jq/"
 packages=()
 
 while read -r -d '/' CMD PKG
@@ -105,7 +111,7 @@ if ! { [[ "$1" == "test" ]] && cd "$ipath/git-db"; }; then
     getGIT "$db_repo" "master" "$ipath/git-db" || true
 fi
 
-if ! cd $ipath/git-db
+if ! cd "$ipath/git-db"
 then
     echo "Unable to download files, exiting! (Maybe try again?)"
     exit 1
@@ -115,13 +121,16 @@ DB_VERSION=$(revision)
 
 cd "$dir"
 
-if [[ "$1" == "test" ]]
-then
-    rm -r /tmp/tar1090-test 2>/dev/null || true
-    mkdir -p /tmp/tar1090-test
-    cp -r ./* /tmp/tar1090-test
-    cd /tmp/tar1090-test
-    TAR_VERSION=$(date +%s)
+if [[ "$1" == "test" ]] || [[ -n "$git_source" ]]; then
+    mkdir -p "$ipath/git"
+    rm -rf "$ipath/git"/* || true
+    if [[ -n "$git_source" ]]; then
+        cp -r "$git_source"/* "$ipath/git"
+    else
+        cp -r ./* "$ipath/git"
+    fi
+    cd "$ipath/git"
+    TAR_VERSION="$(date +%s)_${RANDOM}${RANDOM}"
 else
     if ! getGIT "$repo" "master" "$ipath/git" || ! cd "$ipath/git"
     then
@@ -162,7 +171,7 @@ fi
 if [[ -n $2 ]]; then
     instances="$srcdir $2"
 elif [[ -n $1 ]] && [ "$1" != "test" ] ; then
-    instances="$srcdir tar1090"
+    instances="$1 tar1090"
 elif [ -f /etc/default/tar1090_instances ]; then
     instances=$(</etc/default/tar1090_instances)	
 else
@@ -176,7 +185,7 @@ fi
 instances=$(echo -e "$instances" | grep -v -e '^#')
 
 
-if ! diff tar1090.sh /usr/local/share/tar1090/tar1090.sh &>/dev/null; then
+if ! diff tar1090.sh "$ipath"/tar1090.sh &>/dev/null; then
     changed=yes
     while read -r srcdir instance; do
         if [[ -z "$srcdir" || -z "$instance" ]]; then
@@ -188,16 +197,19 @@ if ! diff tar1090.sh /usr/local/share/tar1090/tar1090.sh &>/dev/null; then
         else
             service="tar1090"
         fi
-        systemctl stop $service 2>/dev/null || true
+        if useSystemd; then
+            systemctl stop "$service" 2>/dev/null || true
+        fi
     done < <(echo "$instances")
-    cp tar1090.sh $ipath
+    cp tar1090.sh "$ipath"
 fi
 
 
 # copy over base files
-cp install.sh uninstall.sh getupintheair.sh LICENSE README.md $ipath
-cp default $ipath/example_config_dont_edit
-rm -f $ipath/default
+cp install.sh uninstall.sh getupintheair.sh LICENSE README.md "$ipath"
+cp default "$ipath/example_config_dont_edit"
+cp html/config.js "$ipath/example_config.js"
+rm -f "$ipath/default"
 
 # create 95-tar1090-otherport.conf
 {
@@ -207,7 +219,7 @@ rm -f $ipath/default
     echo '}'
 } > 95-tar1090-otherport.conf
 
-services=""
+services=()
 names=""
 otherport=""
 
@@ -228,26 +240,25 @@ do
         html_path="$ipath/html"
         service="tar1090"
     fi
-    services+="$service "
+    services+=("$service")
     names+="$instance "
 
     # don't overwrite existing configuration
-    cp -n default /etc/default/$service
-    sed -i -e 's/skyview978/skyaware978/' /etc/default/$service
+    useSystemd && cp -n default /etc/default/"$service"
 
-    sed -i.orig -e "s?SOURCE_DIR?$srcdir?g" -e "s?SERVICE?$service?g" \
+    sed -i.orig -e "s?SOURCE_DIR?$srcdir?g" -e "s?SERVICE?${service}?g" \
         -e "s?/INSTANCE??g" -e "s?HTMLPATH?$html_path?g" 95-tar1090-otherport.conf
 
     if [[ "$instance" == "webroot" ]]; then
-        sed -i.orig -e "s?SOURCE_DIR?$srcdir?g" -e "s?SERVICE?$service?g" \
+        sed -i.orig -e "s?SOURCE_DIR?$srcdir?g" -e "s?SERVICE?${service}?g" \
             -e "s?/INSTANCE??g" -e "s?HTMLPATH?$html_path?g" 88-tar1090.conf
-        sed -i.orig -e "s?SOURCE_DIR?$srcdir?g" -e "s?SERVICE?$service?g" \
+        sed -i.orig -e "s?SOURCE_DIR?$srcdir?g" -e "s?SERVICE?${service}?g" \
             -e "s?/INSTANCE/?/?g" -e "s?HTMLPATH?$html_path?g" nginx.conf
         sed -i -e "s?/INSTANCE?/?g" nginx.conf
     else
-        sed -i.orig -e "s?SOURCE_DIR?$srcdir?g" -e "s?SERVICE?$service?g" \
+        sed -i.orig -e "s?SOURCE_DIR?$srcdir?g" -e "s?SERVICE?${service}?g" \
             -e "s?INSTANCE?$instance?g" -e "s?HTMLPATH?$html_path?g" 88-tar1090.conf
-        sed -i.orig -e "s?SOURCE_DIR?$srcdir?g" -e "s?SERVICE?$service?g" \
+        sed -i.orig -e "s?SOURCE_DIR?$srcdir?g" -e "s?SERVICE?${service}?g" \
             -e "s?INSTANCE?$instance?g" -e "s?HTMLPATH?$html_path?g" nginx.conf
     fi
 
@@ -261,7 +272,7 @@ do
     fi
 
 
-    sed -i.orig -e "s?SOURCE_DIR?$srcdir?g" -e "s?SERVICE?$service?g" tar1090.service
+    sed -i.orig -e "s?SOURCE_DIR?$srcdir?g" -e "s?SERVICE?${service}?g" tar1090.service
 
     cp -r -T html "$TMP"
     cp -r -T "$ipath/git-db/db" "$TMP/db-$DB_VERSION"
@@ -296,42 +307,14 @@ do
 
     sed -i -e "s/tar1090 on github/tar1090 on github ($(date +%y%m%d))/" index.html
 
-    # cache busting sprites.png
-    {
-        spritename="sprites_$(md5sum images/sprites.png | cut -d' ' -f1).png"
-        mv "images/sprites.png" "images/${spritename}"
-        sed -i -e "s#sprites.png#${spritename}#g" script.js
-        sed -i -e "s#sprites.png#${spritename}#g" index.html
-    }
-
-    # cache busting js / css
-    {
-        sedargs=("sed" "-i" "index.html")
-        for file in dbloader.js defaults.js early.js flags.js formatter.js layers.js markers.js planeObject.js registrations.js script.js style.css; do
-            md5sum=$(md5sum $file | cut -d' ' -f1)
-            prefix=$(cut -d '.' -f1 <<< "$file")
-            postfix=$(cut -d '.' -f2 <<< "$file")
-            newname="${prefix}_${md5sum}.${postfix}"
-            mv "$file" "$newname"
-            if [[ $nginx == yes ]]; then
-                gzip -k -3 "$newname"
-            fi
-            sedargs+=("-e" "s#${file}#${newname}#")
-        done
-
-        "${sedargs[@]}"
-    }
-
-    if [[ $nginx == yes ]]; then
-        gzip -k -3 ./libs/*.js
-    fi
+    "$ipath/git/cachebust.sh" "$ipath/git/cachebust.list" "$TMP"
 
     rm -rf "$html_path"
     mv "$TMP" "$html_path"
 
     cd "$dir"
 
-    cp nginx.conf "$ipath/nginx-$service.conf"
+    cp nginx.conf "$ipath/nginx-${service}.conf"
 
     if [[ $lighttpd == yes ]]; then
         # clean up broken symlinks in conf-enabled ...
@@ -348,26 +331,28 @@ do
             true
         elif [[ "$instance" == "webroot" ]]
         then
-            cp 88-tar1090.conf /etc/lighttpd/conf-available/99-$service.conf
-            ln -f -s /etc/lighttpd/conf-available/99-$service.conf /etc/lighttpd/conf-enabled/99-$service.conf
+            cp 88-tar1090.conf /etc/lighttpd/conf-available/99-"${service}".conf
+            ln -f -s /etc/lighttpd/conf-available/99-"${service}".conf /etc/lighttpd/conf-enabled/99-"${service}".conf
         else
-            cp 88-tar1090.conf /etc/lighttpd/conf-available/88-$service.conf
-            ln -f -s /etc/lighttpd/conf-available/88-$service.conf /etc/lighttpd/conf-enabled/88-$service.conf
+            cp 88-tar1090.conf /etc/lighttpd/conf-available/88-"${service}".conf
+            ln -f -s /etc/lighttpd/conf-available/88-"${service}".conf /etc/lighttpd/conf-enabled/88-"${service}".conf
             if [ -f /etc/lighttpd/conf.d/69-skybup.conf ]; then
-                mv /etc/lighttpd/conf-enabled/88-$service.conf /etc/lighttpd/conf-enabled/66-$service.conf
+                mv /etc/lighttpd/conf-enabled/88-"${service}".conf /etc/lighttpd/conf-enabled/66-"${service}".conf
             fi
         fi
     fi
 
-    if [[ $changed == yes ]] || ! diff tar1090.service /lib/systemd/system/$service.service &>/dev/null
-    then
-        cp tar1090.service /lib/systemd/system/$service.service
-        if systemctl enable $service
+    if useSystemd; then
+        if [[ $changed == yes ]] || ! diff tar1090.service /lib/systemd/system/"${service}".service &>/dev/null
         then
-            echo "Restarting $service ..."
-            systemctl restart $service || ! pgrep systemd
-        else
-            echo "$service.service is masked, could not start it!"
+            cp tar1090.service /lib/systemd/system/"${service}".service
+            if systemctl enable "${service}"
+            then
+                echo "Restarting ${service} ..."
+                systemctl restart "$service" || ! pgrep systemd
+            else
+                echo "${service}.service is masked, could not start it!"
+            fi
         fi
     fi
 
@@ -448,7 +433,7 @@ if [[ $lighttpd == yes ]]; then
     fi
 fi
 
-if systemctl show lighttpd 2>/dev/null | grep -qs -F -e 'UnitFileState=enabled' -e 'ActiveState=active'; then
+if useSystemd && systemctl show lighttpd 2>/dev/null | grep -qs -F -e 'UnitFileState=enabled' -e 'ActiveState=active'; then
     echo "Restarting lighttpd ..."
     systemctl restart lighttpd || ! pgrep systemd
 fi
@@ -460,8 +445,8 @@ if [[ $nginx == yes ]]; then
     echo
     echo "To configure nginx for tar1090, please add the following line(s) in the server {} section:"
     echo
-    for service in $services; do
-        echo "include /usr/local/share/tar1090/nginx-$service.conf;"
+    for service in "${services[@]}"; do
+        echo "include ${ipath}/nginx-${service}.conf;"
     done
 fi
 
@@ -476,6 +461,6 @@ elif [[ $nginx == yes ]]; then
         echo "All done! Webinterface once nginx is configured will be available at http://$(ip route get 1.2.3.4 | grep -m1 -o -P 'src \K[0-9,.]*')/$name"
     done
 else
-    echo "All done! You'll need to configure your webserver yourself, see /usr/local/share/tar1090/nginx-tar1090.conf for a reference nginx configuration"
+    echo "All done! You'll need to configure your webserver yourself, see ${ipath}/nginx-tar1090.conf for a reference nginx configuration"
 fi
 
