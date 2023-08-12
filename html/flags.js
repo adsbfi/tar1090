@@ -232,12 +232,22 @@ let unassigned_range = {
 	flag_image: null
 };
 
+let invalid_range = {
+    hexes: [0xA00000, 0x000000, 0x000001, 0x249249, 0x000249, 0x123456, 0xABCDEF, 0xCAFEAB],
+    country: "Unknown (Miscoded transponder)",
+    flag_image: null
+};
+
 // Given a (hex string) ICAO address,
 // return an object describing that ICAO range.
 // Always returns a non-null object.
 //   (todo: binary search)
 function findICAORange(icao) {
 	let hexa = +("0x" + icao);
+
+	if (invalid_range.hexes.includes(hexa)) {
+        return invalid_range;
+    }
 
 	for (let i = 0; i < ICAO_Ranges.length; ++i) {
 		if (hexa >= ICAO_Ranges[i].start && hexa <= ICAO_Ranges[i].end) {
