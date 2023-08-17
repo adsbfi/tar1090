@@ -4333,7 +4333,7 @@ function adjustInfoBlock() {
         //jQuery('#sidebar_canvas').css('margin-bottom', jQuery('#selected_infoblock').height() + 'px');
         //
         if (mapIsVisible && document.getElementById('map_canvas').clientWidth < parseFloat(jQuery('#selected_infoblock').css('width')) * 3) {
-            jQuery('#selected_infoblock').css('height', '290px');
+            jQuery('#selected_infoblock').css('height', '340px');
             jQuery('#selected_typedesc').parent().parent().hide();
             jQuery('#credits').css('bottom', '295px');
             jQuery('#credits').css('left', '5px');
