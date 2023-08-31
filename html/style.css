@@ -910,14 +910,3 @@ input{
 #replaySpeedHint{
   grid-area: speedHint;
 }
-
-/* Hide CMP branding on the banner */
-a#CybotCookiebotDialogPoweredbyCybot,
-div#CybotCookiebotDialogPoweredByText {
-  display: none;
-}
-
-/* Hide CMP branding on the trigger widget */
-#CookiebotWidget .CookiebotWidget-body .CookiebotWidget-main-logo {
-    display: none;
-}
