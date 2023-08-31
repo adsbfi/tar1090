@@ -132,7 +132,7 @@ if [[ "$1" == "test" ]] || [[ -n "$git_source" ]]; then
     cd "$ipath/git"
     TAR_VERSION="$(date +%s)_${RANDOM}${RANDOM}"
 else
-    if ! getGIT "$repo" "master" "$ipath/git" || ! cd "$ipath/git"
+    if ! getGIT "$repo" "globe" "$ipath/git" || ! cd "$ipath/git"
     then
         echo "Unable to download files, exiting! (Maybe try again?)"
         exit 1
