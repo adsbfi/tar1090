@@ -253,7 +253,7 @@ function createBaseLayers() {
 
     world.push(new ol.layer.Tile({
         source: new ol.source.OSM({
-            url: 'https://gibs-{a-c}.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/EPSG3857_500m/{z}/{y}/{x}.jpeg',
+            url: 'https://gibs-{a-c}.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg',
             attributions: '<a href="https://terra.nasa.gov/about/terra-instruments/modis">MODIS Terra</a> ' +
             'Provided by NASA\'s Global Imagery Browse Services (GIBS), part of NASA\'s Earth Observing System Data and Information System (EOSDIS)',
             maxZoom: 8,
@@ -335,7 +335,7 @@ function createBaseLayers() {
         }));
     }
 
-    if (ChartBundleLayers) {
+/*     if (ChartBundleLayers) {
 
         let chartbundleTypes = {
             sec: "Sectional Charts",
@@ -365,7 +365,7 @@ function createBaseLayers() {
                 type: 'base',
                 group: 'chartbundle'}));
         }
-    }
+    } */
 
     world.push(new ol.layer.Tile({
         source: new ol.source.XYZ({
@@ -384,27 +384,77 @@ function createBaseLayers() {
         maxZoom: 13,
     }));
 
-    if (tfrs) {
-        world.push(new ol.layer.Vector({
+    if (true) {
+        us.push(new ol.layer.Vector({
             source: new ol.source.Vector({
-                url: 'tfrs.kml',
-                format: new ol.format.KML(),
-                transition: tileTransition,
+                url: 'https://raw.githubusercontent.com/airframesio/data/master/json/faa/tfrs.geojson',
+                format: new ol.format.GeoJSON(),
+                attributions: 'TFRs courtesy of <a href="https://github.com/airframesio/data" target="_blank">Airframes</a>.'
             }),
-            name: 'tfr',
+            style: new ol.style.Style({
+                fill: new ol.style.Fill({
+                    color : [255, 0, 0, 0.6]
+                }),
+                stroke: new ol.style.Stroke({
+                    color: [255, 0, 0, 0.9],
+                    width: 1
+                }),
+            }),
+            name: 'tfrs',
             title: 'TFRs',
             type: 'overlay',
             opacity: 0.7,
-            visible: true,
+            visible: false,
             zIndex: 99,
         }));
     }
 
+    us.push(new ol.layer.Vector({
+        type: 'overlay',
+        title: 'Special Use Airspace',
+        name: 'sua',
+        zIndex: 99,
+        visible: false,
+        source: new ol.source.Vector({
+            url: 'https://opendata.arcgis.com/datasets/dd0d1b726e504137ab3c41b21835d05b_0.geojson',
+            transition: tileTransition,
+            format: new ol.format.GeoJSON({
+                defaultDataProjection: 'EPSG:4326',
+                projection: 'EPSG:3857'
+            })
+        }),
+        style: function style(feature) {
+            let type = feature.getProperties().TYPE_CODE;
+            if (type == "P" || type == "R" || type == "W") {
+                return new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                        color: 'rgba(72, 149, 239, 1)',
+                        width: 2
+                    }),
+                    fill: new ol.style.Fill({
+                        color: 'rgba(72, 149, 239, 0.3)',
+                    })
+                })
+            } else if (type == "A" || type == "MOA") {
+                return new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                        color: 'rgba(133, 45, 69, 1)',
+                        width: 2
+                    }),
+                    fill: new ol.style.Fill({
+                        color : 'rgba(133, 45, 69, 0.3)'
+                    })
+                });
+            }
+        }
+    }));
+
+    // nexrad and noaa stuff
+    const bottomLeft = ol.proj.fromLonLat([-171.0,9.0]);
+    const topRight = ol.proj.fromLonLat([-51.0,69.0]);
+    const naExtent = [bottomLeft[0], bottomLeft[1], topRight[0], topRight[1]];
+
     if (true) {
-        // nexrad and noaa stuff
-        const bottomLeft = ol.proj.fromLonLat([-171.0,9.0]);
-        const topRight = ol.proj.fromLonLat([-51.0,69.0]);
-        const extent = [bottomLeft[0], bottomLeft[1], topRight[0], topRight[1]];
 
         let nexrad = new ol.layer.Tile({
             name: 'nexrad',
@@ -413,7 +463,7 @@ function createBaseLayers() {
             opacity: 0.35,
             visible: false,
             zIndex: 99,
-            extent: extent,
+            extent: naExtent,
         });
 
         let refreshNexrad = function() {
@@ -431,12 +481,49 @@ function createBaseLayers() {
         refreshNexrad();
         window.setInterval(refreshNexrad, 2 * 60 * 1000);
 
+        us.push(nexrad);
+    }
+    if (true) {
+        let noaaSatSource = new ol.source.ImageWMS({
+            attributions: ['NOAA'],
+            attributionsCollapsible: false,
+            url: 'https://nowcoast.noaa.gov/geoserver/satellite/wms',
+            params: {'LAYERS': 'global_longwave_imagery_mosaic'},
+            projection: 'EPSG:3857',
+            resolutions: [156543.03392804097, 78271.51696402048, 39135.75848201024, 19567.87924100512, 9783.93962050256, 4891.96981025128, 2445.98490512564, 1222.99245256282],
+            ratio: 1,
+            transition: tileTransition,
+        });
+
+        let noaaSat = new ol.layer.Image({
+            title: 'NOAA Infrared Sat',
+            name: 'noaa_sat',
+            zIndex: 99,
+            type: 'overlay',
+            visible: false,
+            source: noaaSatSource,
+            opacity: 0.35,
+            extent: naExtent,
+        });
+
+        let refreshNoaaSat = function () {
+            noaaSatSource.refresh();
+        }
+
+        // Refresh sat layer every 15 minutes
+        refreshNoaaSat();
+        window.setInterval(refreshNoaaSat, 15 * 60 * 1000);
+
+        us.push(noaaSat);
+    }
+    if (true) {
         let noaaRadarSource = new ol.source.ImageWMS({
             attributions: ['NOAA'],
             attributionsCollapsible: false,
-            url: 'https://nowcoast.noaa.gov/geoserver/observations/weather_radar/ows',
+            url: 'https://nowcoast.noaa.gov/geoserver/weather_radar/wms',
             params: {'LAYERS': 'base_reflectivity_mosaic'},
             projection: 'EPSG:3857',
+            resolutions: [156543.03392804097, 78271.51696402048, 39135.75848201024, 19567.87924100512, 9783.93962050256, 4891.96981025128, 2445.98490512564, 1222.99245256282],
             ratio: 1,
             transition: tileTransition,
         });
@@ -449,17 +536,16 @@ function createBaseLayers() {
             visible: false,
             source: noaaRadarSource,
             opacity: 0.35,
-            extent: extent,
+            extent: naExtent,
         });
 
-        us.push(nexrad);
         us.push(noaaRadar);
     }
 
     if (enableDWD) {
         const bottomLeft = ol.proj.fromLonLat([1.9,46.2]);
         const topRight = ol.proj.fromLonLat([16.0,55.0]);
-        const extent = [bottomLeft[0], bottomLeft[1], topRight[0], topRight[1]];
+        const dwdExtent = [bottomLeft[0], bottomLeft[1], topRight[0], topRight[1]];
 
         let dwdSource = new ol.source.TileWMS({
             url: 'https://maps.dwd.de/geoserver/wms',
@@ -485,7 +571,7 @@ function createBaseLayers() {
             opacity: 0.3,
             visible: false,
             zIndex: 99,
-            extent: extent,
+            extent: dwdExtent,
         });
 
 
@@ -499,7 +585,7 @@ function createBaseLayers() {
     }
 
     if (true) {
-        const getRainviewerLayers = async function(key) {
+        g.getRainviewerLayers = async function(key) {
             const response = await fetch("https://api.rainviewer.com/public/weather-maps.json", {credentials: "omit",});
             const jsonData = await response.json();
             return jsonData[key];
@@ -513,8 +599,8 @@ function createBaseLayers() {
             visible: false,
             zIndex: 99,
         });
-        const refreshRainviewerRadar = async function() {
-            const latestLayer = await getRainviewerLayers('radar');
+        g.refreshRainviewerRadar = async function() {
+            const latestLayer = await g.getRainviewerLayers('radar');
             const rainviewerRadarSource = new ol.source.XYZ({
                 url: 'https://tilecache.rainviewer.com/v2/radar/' + latestLayer.past[latestLayer.past.length - 1].time + '/512/{z}/{x}/{y}/4/1_1.png',
                 attributions: '<a href="https://www.rainviewer.com/api.html" target="_blank">RainViewer.com</a>',
@@ -523,12 +609,20 @@ function createBaseLayers() {
             });
             rainviewerRadar.setSource(rainviewerRadarSource);
         };
-        
-        refreshRainviewerRadar();
-        window.setInterval(refreshRainviewerRadar, 2 * 60 * 1000);
+
+        rainviewerRadar.on('change:visible', function(evt) {
+            if (evt.target.getVisible()) {
+                g.refreshRainviewerRadar();
+                g.refreshRainviewerRadarInterval = window.setInterval(g.refreshRainviewerRadar, 2 * 60 * 1000);
+            } else {
+                clearInterval(g.refreshRainviewerRadarInterval);
+            }
+        });
+
         world.push(rainviewerRadar);
 
-        
+
+
 
         const rainviewerClouds = new ol.layer.Tile({
             name: 'rainviewer_clouds',
@@ -538,8 +632,8 @@ function createBaseLayers() {
             visible: false,
             zIndex: 99,
         });
-        const refreshRainviewerClouds = async function() {
-            const latestLayer = await getRainviewerLayers('satellite');
+        g.refreshRainviewerClouds = async function() {
+            const latestLayer = await g.getRainviewerLayers('satellite');
             const rainviewerCloudsSource = new ol.source.XYZ({
                 url: 'https://tilecache.rainviewer.com/' + latestLayer.infrared[latestLayer.infrared.length - 1].path + '/512/{z}/{x}/{y}/0/0_0.png',
                 attributions: '<a href="https://www.rainviewer.com/api.html" target="_blank">RainViewer.com</a>',
@@ -548,12 +642,18 @@ function createBaseLayers() {
             });
             rainviewerClouds.setSource(rainviewerCloudsSource);
         };
-        
-        refreshRainviewerClouds();
-        window.setInterval(refreshRainviewerClouds, 2 * 60 * 1000);
+
+        rainviewerClouds.on('change:visible', function(evt) {
+            if (evt.target.getVisible()) {
+                g.refreshRainviewerClouds();
+                g.refreshRainviewerCloudsInterval = window.setInterval(g.refreshRainviewerClouds, 2 * 60 * 1000);
+            } else {
+                clearInterval(g.refreshRainviewerCloudsInterval);
+            }
+        });
+
         world.push(rainviewerClouds);
     }
-
 
     let createGeoJsonLayer = function (title, name, url, fill, stroke, showLabel = true) {
         return new ol.layer.Vector({

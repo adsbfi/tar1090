@@ -1727,7 +1727,7 @@ PlaneObject.prototype.updateMarker = function(moved) {
         this.baseScale = baseMarker[1] * 0.96;
     }
     this.scale = iconSize * this.baseScale;
-    this.strokeWidth = outlineWidth * ((this.selected && !SelectedAllPlanes && !onlySelected) ? 1.15 : 0.7) / this.baseScale;
+    this.strokeWidth = outlineWidth * ((this.selected && !SelectedAllPlanes && !onlySelected) ? 0.85 : 0.7) / this.baseScale;
 
     if (!this.marker && (!webgl || enableLabels)) {
         this.marker = new ol.Feature(this.olPoint);
@@ -1749,11 +1749,9 @@ PlaneObject.prototype.updateMarker = function(moved) {
         this.setMarkerRgb();
         const iconRotation = this.shape.noRotate ? 0 : this.rotation;
         this.glMarker.set('rotation', iconRotation * Math.PI / 180.0 + mapOrientation);
-        this.glMarker.set('size', this.scale * Math.max(this.shape.w, this.shape.h));
-        this.glMarker.set('cx', getSpriteX(this.shape) / glImapWidth);
-        this.glMarker.set('cy', getSpriteY(this.shape) / glImapHeight);
-        this.glMarker.set('dx', (getSpriteX(this.shape) + 1) / glImapWidth);
-        this.glMarker.set('dy', (getSpriteY(this.shape) + 1) / glImapHeight);
+        this.glMarker.set('scale', this.scale * Math.max(this.shape.w, this.shape.h) / glIconSize);
+        this.glMarker.set('sx', getSpriteX(this.shape) * glIconSize);
+        this.glMarker.set('sy', getSpriteY(this.shape) * glIconSize);
     }
 
     if (this.marker && (!webgl || enableLabels)) {
@@ -2798,7 +2796,7 @@ PlaneObject.prototype.checkForDB = function(data) {
             this.dbinfoLoaded = true;
         }
     }
-    if (!this.dbinfoLoaded && (!dbServer || replay)) {
+    if (!this.dbinfoLoaded && (!dbServer || replay || pTracks)) {
         this.getAircraftData();
         return;
     }
@@ -2913,14 +2911,12 @@ PlaneObject.prototype.setFlight = function(flight) {
                 // grab up to the first 100 callsigns and leave the rest for later
                 var route_check_array = g.route_check_array.slice(0,100);
                 g.route_check_array = g.route_check_array.slice(100);
-
                 jQuery.ajax({
                     type: "POST",
                     url: routeApiUrl,
                     contentType: 'application/json; charset=utf-8',
                     dataType: 'json',
-                    data: JSON.stringify({ 'planes': route_check_array}),
-                    headers: { "Access-Control-Allow-Origin": "*" }})
+                    data: JSON.stringify({ 'planes': route_check_array})})
                     .done((routes) => {
                         g.route_check_in_flight = false;
                         if (debugAll) {
@@ -2937,7 +2933,7 @@ PlaneObject.prototype.setFlight = function(flight) {
                                 } else {
                                     logText += `adding ${route._airport_codes_iata}`;
                                 }
-                                console.log(logText);
+                                //console.log(logText);
                             }
                             if (route.airport_codes != 'unknown') {
                                 if (route.plausible == true) {
