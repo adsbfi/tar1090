@@ -119,6 +119,7 @@ let firstDraw = true;
 let darkerColors = false;
 let autoselect = false;
 let nogpsOnly = false;
+let spritesDataURL = null;
 let trace_hist_only = false;
 let traces_high_res = false;
 let show_rId = true;
@@ -326,116 +327,124 @@ function processReceiverUpdate(data, init) {
     }
 }
 function fetchFail(jqxhr, status, error) {
-    pendingFetches--;
-    if (pendingFetches <= 0 && !tabHidden) {
-        triggerRefresh++;
-        checkMovement();
-    }
-    status = jqxhr.status;
-    if (jqxhr.readyState == 0) error = "Can't connect to server, check your network!";
-    let errText = status + (error ? (": " + error) : "");
-    console.log(jqxhr);
-    console.log(error);
-    if (status != 429 && status != '429') {
-        jQuery("#update_error_detail").text(errText);
-        jQuery("#update_error").css('display','block');
-        StaleReceiverCount++;
-    } else {
-        if (C429++ > 16) {
-            globeRateUpdate();
-            C429 = 0;
+    try {
+        pendingFetches--;
+        if (pendingFetches <= 0 && !tabHidden) {
+            triggerRefresh++;
+            checkMovement();
         }
+        status = jqxhr.status;
+        if (jqxhr.readyState == 0) error = "Can't connect to server, check your network!";
+        let errText = status + (error ? (": " + error) : "");
+        console.log(jqxhr);
+        console.log(error);
+        if (status != 429 && status != '429') {
+            jQuery("#update_error_detail").text(errText);
+            jQuery("#update_error").css('display','block');
+            StaleReceiverCount++;
+        } else {
+            if (C429++ > 16) {
+                globeRateUpdate();
+                C429 = 0;
+            }
+        }
+    } catch (e) {
+        console.error(e);
     }
 }
 
 function fetchDone(data) {
-    pendingFetches--;
-    if (data == null) {
-        return;
-    }
-    if (zstd) {
-        let arr = new Uint8Array(data);
-        lastRequestSize = arr.byteLength;
-        let res;
-        try {
-            res = zstdDecode( arr, 0 );
-        } catch (e) {
-            let errText = e.message;
-            console.log(errText);
-            jQuery("#update_error_detail").text(errText);
-            jQuery("#update_error").css('display','block');
+    try {
+        pendingFetches--;
+        if (data == null) {
             return;
         }
-        let arrayBuffer = res.buffer
-        // return type is Uint8Array, wqi requires the ArrayBuffer
-        data = { buffer: arrayBuffer, };
-        wqi(data);
-    } else if (binCraft) {
-        lastRequestSize = data.byteLength / 2;
-        data = { buffer: data, };
-        wqi(data);
-    }
-    data.urlIndex = this.urlIndex;
-
-    if (!data.aircraft || !data.now) {
-        let error = data.error;
-        if (error) {
-            jQuery("#update_error_detail").text(error);
-            jQuery("#update_error").css('display','block');
-            StaleReceiverCount++;
+        if (zstd) {
+            let arr = new Uint8Array(data);
+            lastRequestSize = arr.byteLength;
+            let res;
+            try {
+                res = zstdDecode( arr, 0 );
+            } catch (e) {
+                let errText = e.message;
+                console.log(errText);
+                jQuery("#update_error_detail").text(errText);
+                jQuery("#update_error").css('display','block');
+                return;
+            }
+            let arrayBuffer = res.buffer
+            // return type is Uint8Array, wqi requires the ArrayBuffer
+            data = { buffer: arrayBuffer, };
+            wqi(data);
+        } else if (binCraft) {
+            lastRequestSize = data.byteLength / 2;
+            data = { buffer: data, };
+            wqi(data);
         }
-        return;
-    }
+        data.urlIndex = this.urlIndex;
 
-    //console.time("Process " + data.globeIndex);
-    processReceiverUpdate(data);
-    //console.timeEnd("Process " + data.globeIndex);
-    data = null;
+        if (!data.aircraft || !data.now) {
+            let error = data.error;
+            if (error) {
+                jQuery("#update_error_detail").text(error);
+                jQuery("#update_error").css('display','block');
+                StaleReceiverCount++;
+            }
+            return;
+        }
 
-    if (uat_data) {
-        processReceiverUpdate(uat_data);
-        uat_data = null;
-    }
+        //console.time("Process " + data.globeIndex);
+        processReceiverUpdate(data);
+        //console.timeEnd("Process " + data.globeIndex);
+        data = null;
 
-    if (pendingFetches <= 0 && !tabHidden) {
-        triggerRefresh++;
-        checkMovement();
-        if (firstFetch) {
-            firstFetch = false;
-            if (uuid) {
-                const ext = myExtent(OLMap.getView().calculateExtent(OLMap.getSize()));
-                let jump = true;
-                for (let i = 0; i < g.planesOrdered.length; ++i) {
-                    const plane = g.planesOrdered[i];
-                    if (plane.visible && inView(plane.position, ext)) {
-                        jump = false;
-                        break;
+        if (uat_data) {
+            processReceiverUpdate(uat_data);
+            uat_data = null;
+        }
+
+        if (pendingFetches <= 0 && !tabHidden) {
+            triggerRefresh++;
+            checkMovement();
+            if (firstFetch) {
+                firstFetch = false;
+                if (uuid) {
+                    const ext = myExtent(OLMap.getView().calculateExtent(OLMap.getSize()));
+                    let jump = true;
+                    for (let i = 0; i < g.planesOrdered.length; ++i) {
+                        const plane = g.planesOrdered[i];
+                        if (plane.visible && inView(plane.position, ext)) {
+                            jump = false;
+                            break;
+                        }
+                    }
+                    if (jump) {
+                        followRandomPlane();
+                        deselectAllPlanes();
+                        OLMap.getView().setZoom(6);
                     }
                 }
-                if (jump) {
-                    followRandomPlane();
-                    deselectAllPlanes();
-                    OLMap.getView().setZoom(6);
-                }
+                checkRefresh();
             }
-            checkRefresh();
         }
-    }
 
-    if (fetchCalls == 1) { console.timeEnd("first fetch()"); };
+        if (fetchCalls == 1) { console.timeEnd("first fetch()"); };
 
-    if (!g.firstFetchDone) { afterFirstFetch(); };
+        if (!g.firstFetchDone) { afterFirstFetch(); };
 
-    // Check for stale receiver data
-    if (last == now && !globeIndex) {
-        StaleReceiverCount++;
-        if (StaleReceiverCount > 5) {
-            jQuery("#update_error_detail").text("The data from the server hasn't been updated in a while.");
-            jQuery("#update_error").css('display','block');
+        // Check for stale receiver data
+        if (last == now && !globeIndex) {
+            StaleReceiverCount++;
+            if (StaleReceiverCount > 5) {
+                jQuery("#update_error_detail").text("The data from the server hasn't been updated in a while.");
+                jQuery("#update_error").css('display','block');
+            }
+        } else if (StaleReceiverCount > 0){
+            StaleReceiverCount = 0;
+            jQuery("#update_error").css('display','none');
         }
-    } else if (StaleReceiverCount > 0){
-        StaleReceiverCount = 0;
-        jQuery("#update_error").css('display','none');
+    } catch (e) {
+        console.error(e);
     }
 }
 
@@ -512,7 +521,7 @@ function fetchData(options) {
         }
     }
     if (debugFetch) {
-        console.log((currentTime - lastFetch)/1000);
+        console.log('Time since last fetch: ' + (currentTime - lastFetch)/1000);
     }
     lastFetch = currentTime;
 
@@ -626,7 +635,9 @@ function fetchData(options) {
     fetchCounter += ac_url.length;
 
     for (let i in ac_url) {
-        //console.log(ac_url[i]);
+        if (debugFetch) {
+            console.log('Fetching: ' + ac_url[i]);
+        }
         let req;
         if (binCraft || zstd) {
             req = jQuery.ajax({
@@ -655,6 +666,7 @@ function fetchData(options) {
 // kicks off the whole rabbit hole
 function initialize() {
     if (usp.has('iconTest')) {
+        jQuery('#iconTestCanvas').show();
         iconTest();
         return;
     }
@@ -774,6 +786,9 @@ function initPage() {
         MapType_tar1090 = 'carto_light_all';
         lineWidth=4;
         enableLabels=true;
+    }
+    if (usp.has('debugFetch')) {
+        debugFetch = true;
     }
 
     if (usp.has('rangeRings')) {
@@ -1646,14 +1661,9 @@ function initSourceFilter(colors) {
     html += createFilter(colors['uat'], 'UAT / ADS-R', sources[1][0]);
     html += createFilter(colors['mlat'], 'MLAT', sources[2]);
     html += createFilter(colors['tisb'], 'TIS-B', sources[3]);
-
-    //if (!globeIndex)
     html += createFilter(colors['modeS'], 'Mode-S', sources[4]);
-    if (globeIndex)
-        html += createFilter(colors['other'], 'Other', sources[5]);
-
-    if (globeIndex)
-        html += createFilter(colors['uat'], 'ADS-C', sources[6]);
+    html += createFilter(colors['other'], 'Other', sources[5]);
+    html += createFilter(colors['uat'], 'ADS-C', sources[6]);
 
     document.getElementById('sourceFilter').innerHTML = html;
 
@@ -2020,45 +2030,40 @@ function webglAddLayer() {
         alt_baro: 25000, });
     let plane = g.planes['~c0ffee'];
 
+    let spriteSrc = spritesDataURL ? spritesDataURL : 'images/sprites.png';
+    //console.log(spriteSrc);
     try {
         let glStyle = {
-            symbol: {
-                symbolType: 'image',
-                src: 'images/sprites.png',
-                size: [ 'get', 'size' ],
-                offset: [0, 0],
-                textureCoord: [ 'array',
-                    [ 'get', 'cx' ],
-                    [ 'get', 'cy' ],
-                    [ 'get', 'dx' ],
-                    [ 'get', 'dy' ]
-                ],
-                color: [
+            'icon-src': spriteSrc,
+            'icon-color': [
                     'color',
                     [ 'get', 'r' ],
                     [ 'get', 'g' ],
                     [ 'get', 'b' ],
                     1
-                ],
-                rotateWithView: false,
-                rotation: [ 'get', 'rotation' ],
-            },
+            ],
+            'icon-size': [ glIconSize, glIconSize ],
+            'icon-offset': [
+                'array',
+                [ 'get', 'sx' ],
+                [ 'get', 'sy' ]
+            ],
+            'icon-rotation': [ 'get' , 'rotation' ],
+            'icon-rotate-with-view': false,
+            'icon-scale': [ 'get', 'scale', 'number' ]
         };
         if (heatmap) {
             glStyle = {
-                symbol: {
-                    symbolType: "circle",
-                    size: heatmap.radius * globalScale * 2.5,
-                    offset: [0, 0],
-                    opacity: heatmap.alpha || 1,
-                    color: [
-                        'color',
-                        [ 'get', 'r' ],
-                        [ 'get', 'g' ],
-                        [ 'get', 'b' ],
-                        1
-                    ],
-                }
+                'circle-radius': heatmap.radius * globalScale * 1.25,
+                'circle-displacement': [0, 0],
+                'circle-opacity': heatmap.alpha || 1,
+                'circle-fill-color' : [
+                    'color',
+                    [ 'get', 'r' ],
+                    [ 'get', 'g' ],
+                    [ 'get', 'b' ],
+                    1
+                ]
             }
         }
 
@@ -2090,10 +2095,7 @@ function webglAddLayer() {
             console.error(error);
         }
         console.error(error);
-        loStore['webglFailStamp'] = new Date().getTime();
         success = false;
-        if (loStore['webgl'] == 'true')
-            loStore.removeItem('webgl');
     }
     delete g.planes[plane.icao];
     g.planesOrdered.splice(g.planesOrdered.indexOf(plane), 1);
@@ -2108,12 +2110,7 @@ function webglAddLayer() {
 
 function webglInit() {
     let init = true;
-    // if webGL failed in the last 7 days, don't even try unless people click the toggle.
-    if (loStore['webglFailStamp'] && Number(loStore['webglFailStamp']) +  7 * 24 * 3600 * 1000 > new Date().getTime()) {
-        init = false;
-        if (loStore['webgl'] == undefined)
-            console.log('webGL failed in the past 7 days, not even trying to initialize it');
-    }
+
     new Toggle({
         key: "webgl",
         display: "WebGL",
@@ -2154,6 +2151,13 @@ function webglInit() {
 
 function ol_map_init() {
 
+    if (0) {
+        let canvas = iconTest();
+        spritesDataURL = canvas.toDataURL();
+        jQuery('#iconTestCanvas').remove();
+        console.log(spritesDataURL);
+    }
+
     OLMap = new ol.Map({
         target: 'map_canvas',
         layers: layers_group,
@@ -2167,6 +2171,7 @@ function ol_map_init() {
             new ol.control.ScaleLine({units: DisplayUnits})
         ],
         interactions: new ol.interaction.defaults({altShiftDragRotate:false, pinchRotate:false,}),
+        maxTilesLoading: 4,
     });
 
     console.time('webglInit');
@@ -4375,12 +4380,10 @@ function adjustInfoBlock() {
 }
 
 function initializeUnitsSelector() {
-    // Get display unit preferences from local storage
-    if (!loStore.getItem('displayUnits')) {
-        loStore['displayUnits'] = 'nautical';
+    // Get display unit preferences from local storage otherwise use value previously set defaults.js or config.js
+    if (loStore.getItem('displayUnits')) {
+        DisplayUnits = loStore['displayUnits'];
     }
-
-    DisplayUnits = loStore['displayUnits'];
 
     // Initialize drop-down
     jQuery('#units_selector')
