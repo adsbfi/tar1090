@@ -188,12 +188,14 @@ let badDotMlat;
 let showingReplayBar = false;
 
 function processAircraft(ac, init, uat) {
-    let hex = Array.isArray(ac) ? ac[0] : ac.hex;
+    const isArray = Array.isArray(ac);
+    const hex = isArray ? ac[0] : ac.hex;
 
     if (icaoFilter && !icaoFilter.includes(hex))
         return;
 
-    if (g.historyKeep && !g.historyKeep[hex]) {
+    const type = isArray ? ac[7] : ac.type;
+    if (g.historyKeep && !g.historyKeep[hex] && type != 'adsc') {
         return;
     }
 
@@ -3374,13 +3376,6 @@ function refreshSelected() {
     }
 
     jQuery('#selected_country').updateText(selected.country.replace("special use", "special"));
-    if (ShowFlags && selected.flag_image !== null) {
-        jQuery('#selected_flag').removeClass('hidden');
-        jQuery('#selected_flag img').attr('src', FlagPath + selected.flag_image);
-        jQuery('#selected_flag img').attr('title', selected.country);
-    } else {
-        jQuery('#selected_flag').addClass('hidden');
-    }
 
     if (selected.position == null) {
         jQuery('#selected_position').updateText('n/a');
@@ -3679,8 +3674,8 @@ function refreshFeatures() {
         text: 'Flag',
         header: function() { return ""; },
         sort: function () { sortBy('country', compareAlpha, function(x) { return x.country; }); },
-        value: function(plane) { return (plane.flag_image ? ('<img width="20" height="12" style="display: block;margin: auto;" src="' + FlagPath + plane.flag_image + '" title="' + plane.country + '"></img>') : ''); },
-        hStyle: 'style="width: 20px; padding: 3px;"',
+        value: function(plane) { return (plane.country_code ? ('<img width="18" height="12" style="display: block;margin: auto;" src="flags/3x2/' + plane.country_code.toUpperCase() + '.svg" title="' + plane.country + '"></img>') : ''); },
+        hStyle: 'style="width: 18px; padding: 3px;"',
         html: true,
     };
     cols.flight = {
