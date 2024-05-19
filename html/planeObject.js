@@ -10,7 +10,7 @@ function PlaneObject(icao) {
     this.icao      = icao;
     const icaorange = findICAORange(icao);
     this.country = icaorange.country;
-    this.flag_image = icaorange.flag_image;
+    this.country_code = icaorange.country_code;
 
     this.numHex = parseInt(icao.replace('~', '1'), 16);
     this.fakeHex = this.numHex > 16777215; // non-icao hex
@@ -486,7 +486,7 @@ PlaneObject.prototype.updateTrack = function(now, last, serverTrack, stale) {
     // Time difference between two position updates should not be much
     // greater than the difference between data inputs
     let time_difference = (this.position_time - this.prev_time) - 2;
-    if (!loadFinished || serverTrack)
+    if (g.refreshHistory || !loadFinished || serverTrack)
         time_difference = (this.position_time - this.prev_time) - Math.min(60, now - last);
 
     //let stale_timeout = lastseg.estimated ? 5 : 10;
@@ -750,6 +750,7 @@ PlaneObject.prototype.getMarkerColor = function(options) {
 };
 
 function altitudeColor(altitude) {
+    altitude = adjust_baro_alt(altitude);
     let h, s, l;
 
     if (altitude == null) {
@@ -856,7 +857,7 @@ PlaneObject.prototype.updateIcon = function() {
         if (labelsGeom) {
             alt = adjust_geom_alt(this.alt_geom, this.position);
         } else {
-            alt = this.altitude;
+            alt = adjust_baro_alt(this.altitude);
         }
         let altString = (alt == null) ? unknown : format_altitude_brief(alt, this.vert_rate, DisplayUnits, showLabelUnits);
         let speedString = (this.speed == null) ? (NBSP+'?'+NBSP) : format_speed_brief(this.speed, DisplayUnits, showLabelUnits).padStart(3, NBSP);
@@ -1331,7 +1332,7 @@ PlaneObject.prototype.updatePositionData = function(now, last, data, init) {
     if (this.position && SitePosition) {
         if (pTracks && this.sitedist) {
             this.sitedist = Math.max(ol.sphere.getDistance(SitePosition, this.position), this.sitedist);
-        } else {
+        } else if (!init) {
             this.sitedist = ol.sphere.getDistance(SitePosition, this.position);
         }
     }
@@ -1957,7 +1958,7 @@ PlaneObject.prototype.updateLines = function() {
                 if (labelsGeom) {
                     alt = adjust_geom_alt(seg.alt_geom, seg.position);
                 } else {
-                    alt = seg.alt_real;
+                    alt = adjust_baro_alt(seg.alt_real);
                 }
 
                 if (alt == null) {
@@ -2796,7 +2797,7 @@ PlaneObject.prototype.checkForDB = function(data) {
             this.dbinfoLoaded = true;
         }
     }
-    if (!this.dbinfoLoaded && (!dbServer || replay || pTracks)) {
+    if (!this.dbinfoLoaded && (!dbServer || replay || pTracks || heatmap)) {
         this.getAircraftData();
         return;
     }
@@ -2832,8 +2833,8 @@ PlaneObject.prototype.setProjection = function(arg) {
     //let trace = new Error().stack.toString();
     //console.log(lat + ' ' + trace);
 
-    // manual wrap around
-    if (webgl && Math.abs(CenterLon - lon) > 180) {
+    // manual wrap around (no longer necessary due to OpenLayers changing their webGL code)
+    if (0 && webgl && Math.abs(CenterLon - lon) > 180) {
         if (CenterLon < 0)
             lon -= 360;
         else

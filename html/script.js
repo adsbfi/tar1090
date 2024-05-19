@@ -45,7 +45,6 @@ let SelectedAllPlanes = false;
 let HighlightedPlane = null;
 let FollowSelected = false;
 let followPos = [];
-let loadFinished = false;
 let loadStart = new Date().getTime();
 let mapResizeTimeout;
 let pointerMoveTimeout;
@@ -69,6 +68,7 @@ let noVanish = false;
 let filterTracks = false; // altitude filter: don't filter planes but rather their tracks by altitude
 let refreshId = 0;
 let lastFetch = 0;
+let actualOutline = {};
 let globeIndexNow = {};
 let globeIndexDist = {};
 let globeIndexSpecialLookup = {};
@@ -135,6 +135,10 @@ let lastRequestBox = '';
 let nextQuerySelected = 0;
 let enableDynamicCachebusting = false;
 let lastRefreshInt = 1000;
+let reapTimeout = globeIndex ? 240 : 480;
+
+
+let baroCorrectQNH = 1013.25;
 
 let limitUpdates = -1;
 
@@ -184,11 +188,16 @@ let badDotMlat;
 let showingReplayBar = false;
 
 function processAircraft(ac, init, uat) {
-    let isArray = Array.isArray(ac);
-    let hex = isArray ? ac[0] : ac.hex;
+    const isArray = Array.isArray(ac);
+    const hex = isArray ? ac[0] : ac.hex;
 
     if (icaoFilter && !icaoFilter.includes(hex))
         return;
+
+    const type = isArray ? ac[7] : ac.type;
+    if (g.historyKeep && !g.historyKeep[hex] && type != 'adsc') {
+        return;
+    }
 
     if (uat && uatNoTISB && ac.type && ac.type.substring(0,4) == "tisb") {
         // drop non ADS-B planes from UAT (TIS-B)
@@ -285,7 +294,7 @@ function processReceiverUpdate(data, init) {
         if (data.now <= now && !globeIndex) {
             if (data.now < now) {
                 backwardsCounter++;
-                console.log('timestep backwards or the same, ignoring data:' + now + ' -> ' + data.now);
+                console.log('timestep backwards or the same, ignoring data: ' + now + ' -> ' + data.now);
                 if (backwardsCounter >= 5) {
                     backwardsCounter = 0;
                     console.log('resetting all data now:' + now + ' -> ' + data.now);
@@ -302,6 +311,9 @@ function processReceiverUpdate(data, init) {
             return;
         }
         if (data.now > now) {
+            if (0 && now && data.now - now > 10) {
+                console.log('now jumped: ' + localTime(new Date(now * 1000)) + ' -> ' + localTime(new Date(data.now * 1000)));
+            }
             notNewCounter = 0;
             backwardsCounter = 0;
             last = now;
@@ -393,6 +405,11 @@ function fetchDone(data) {
             return;
         }
 
+        if (!timersActive) {
+            //console.log(localTime(new Date()) + " fetchDone: not applying data due to !timersActive");
+            return;
+        }
+
         //console.time("Process " + data.globeIndex);
         processReceiverUpdate(data);
         //console.timeEnd("Process " + data.globeIndex);
@@ -458,9 +475,10 @@ function db_load_type_cache() {
     });
 }
 
+g.afterLoadDone = false;
 g.afterLoad = [];
 function runAfterLoad(func) {
-    if (g.firstFetchDone) {
+    if (g.afterLoadDone) {
         func()
     } else {
         g.afterLoad.push(func);
@@ -473,30 +491,23 @@ function afterFirstFetch() {
     g.firstFetchDone = true;
 
     setTimeout(() => {
-        console.time('afterFirstFetch');
+        console.time('afterFirstFetch()');
 
         let func;
         while ((func = g.afterLoad.pop())) {
             func();
         }
+        g.afterLoadDone = false;
 
         geoMag = geoMagFactory(cof2Obj());
 
         db_load_type_cache(); // this will do a refresh()
 
-        if (limitUpdates != 0) {
-            (typeof load_gt != 'undefined') && (load_gt) && (load_gt()) && (load_gt = null);
-            (typeof load_fi != 'undefined') && (load_fi) && (load_fi()) && (load_fi = null);
-            (typeof load_freestar != 'undefined') && (load_freestar) && (load_freestar()) && (load_freestar = null);
-        } else {
-            (typeof hide_freestar != 'undefined') && (hide_freestar) && (hide_freestar());
-        }
-
         if (usp.has('screenshot')) {
             clearIntervalTimers('silent');
         }
 
-        console.timeEnd('afterFirstFetch');
+        console.timeEnd('afterFirstFetch()');
     }, 150);
 }
 
@@ -505,6 +516,10 @@ let C429 = 0;
 let fetchCalls = 0;
 function fetchData(options) {
     options = options || {};
+    if (!timersActive) {
+        //console.log(localTime(new Date()) + " fetchData inhibited by !timersActive");
+        return;
+    }
     if (heatmap || replay || showTrace || pTracks || !loadFinished || inhibitFetch) {
         return;
     }
@@ -703,9 +718,9 @@ function initialize() {
 
         processQueryToggles();
 
+        jQuery.when(historyQueued).done(push_history);
+
         if (nHistoryItems) {
-            // Wait for history item downloads and append them to the buffer
-            push_history();
             jQuery.when(historyLoaded).done(afterHistoryLoad);
         } else {
             afterHistoryLoad();
@@ -713,9 +728,9 @@ function initialize() {
     });
 }
 function afterHistoryLoad() {
-    if (nHistoryItems) {
-        reaper();
-    }
+    if (!heatmap)
+        jQuery("#loader").hide();
+
     if (!zstdDecode) {
         startPage();
     } else {
@@ -1107,6 +1122,9 @@ function initPage() {
     jQuery("#expand_sidebar_button").click(expandSidebar);
     jQuery("#shrink_sidebar_button").click(showMap);
 
+    jQuery("#altimeter_form").submit(onAltimeterChange);
+    jQuery("#altimeter_set_standard").click(onAltimeterSetStandard);
+
     // Set up altitude filter button event handlers and validation options
     jQuery("#altitude_filter_form").submit(onFilterByAltitude);
     jQuery("#source_filter_form").submit(updateSourceFilter);
@@ -1244,6 +1262,28 @@ jQuery('#selected_altitude_geom1')
         }
     });
 
+    new Toggle({
+        key: "baroUseQNH",
+        display: "Baro. alt.: correct for QNH",
+        container: "#settingsLeft",
+        init: baroUseQNH,
+        setState: function(state) {
+            baroUseQNH = state;
+            if (baroUseQNH) {
+                jQuery('#selected_altitude1_title').updateText('Corr. baro. alt.');
+                jQuery('#selected_altitude2_title').updateText('Corr. barometric');
+                jQuery('#infoblock_altimeter').removeClass('hidden');
+            } else {
+                jQuery('#selected_altitude1_title').updateText('Baro. altitude');
+                jQuery('#selected_altitude2_title').updateText('Barometric');
+                jQuery('#infoblock_altimeter').addClass('hidden');
+            }
+            if (loadFinished) {
+                remakeTrails();
+                refreshSelected();
+            }
+        }
+    });
 
     if (usp.has('labelsGeom')) {
         toggles['labelsGeom'].toggle(true, 'init');
@@ -1717,7 +1757,8 @@ function initFlagFilter(colors) {
 }
 
 function push_history() {
-    jQuery("#loader_progress").attr('max',nHistoryItems*2);
+    HistoryItemsReturned = 0;
+    PositionHistoryBuffer = [];
 
     for (let i = 0; i < nHistoryItems; i++) {
         push_history_item(i);
@@ -1725,34 +1766,39 @@ function push_history() {
 }
 
 function push_history_item(i) {
-
-    jQuery.when(deferHistory[i])
+    deferHistory[i]
         .done(function(json) {
+            HistoryItemsReturned++;
 
             if (HistoryChunks) {
                 if (json && json.files) {
+                    //g.refreshHistory && console.log("itemsreturned chunk: " + HistoryItemsReturned + " chunklen: " + json.files.length);
                     for (let i in json.files) {
                         PositionHistoryBuffer.push(json.files[i]);
+                        if (i == 0 || i == json.files.length - 1) {
+                            //g.refreshHistory && console.log("history buffer push: " + localTime(new Date(json.files[i].now * 1000)));
+                        }
                     }
                 } else if (json && json.now) {
+                    //g.refreshHistory && console.log("itemsreturned simple json: " + HistoryItemsReturned);
                     PositionHistoryBuffer.push(json);
+                    //g.refreshHistory && console.log("history buffer push: " + localTime(new Date(json.now * 1000)));
                 }
             } else {
                 PositionHistoryBuffer.push(json);
             }
 
-
-            jQuery("#loader_progress").attr('value',HistoryItemsReturned);
-            HistoryItemsReturned++;
             if (HistoryItemsReturned == nHistoryItems) {
                 parseHistory();
+            }
+            if (HistoryItemsReturned > nHistoryItems) {
+                console.log(localTime(new Date()) + " WARNING: (HistoryItemsReturned > nHistoryItems)");
             }
         })
 
         .fail(function(jqxhr, status, error) {
 
             //Doesn't matter if it failed, we'll just be missing a data point
-            jQuery("#loader_progress").attr('value',HistoryItemsReturned);
             //console.log(error);
             HistoryItemsReturned++;
             if (HistoryItemsReturned == nHistoryItems) {
@@ -1767,22 +1813,68 @@ function parseHistory() {
 
     for (let i in deferHistory)
         deferHistory[i] = null;
+    deferHistory = null;
 
 
     if (PositionHistoryBuffer.length > 0) {
 
         // Sort history by timestamp
-        console.log("Sorting history: " + PositionHistoryBuffer.length);
+        console.log(localTime(new Date()) + " Sorting history: " + PositionHistoryBuffer.length);
         PositionHistoryBuffer.sort(function(x,y) { return (y.now - x.now); });
+
+        let currentTime = new Date().getTime()/1000;
+
+        if (!pTracks) {
+            // get all planes within the reapTimeout
+            g.historyKeep = {};
+            for (let i = 0; i < PositionHistoryBuffer.length; i++)  {
+                let data = PositionHistoryBuffer[i];
+                if (currentTime - data.now > reapTimeout) {
+                    break;
+                }
+                for (let j=0; j < data.aircraft.length; j++) {
+                    const ac = data.aircraft[j];
+                    const isArray = Array.isArray(ac);
+                    const hex = isArray ? ac[0] : ac.hex;
+                    const seen = isArray ? ac[6] : ac.seen;
+                    if (currentTime - (data.now - seen) < reapTimeout) {
+                        g.historyKeep[hex] = 1;
+                    }
+                }
+                //console.log("hist: " + localTime(new Date(data.now * 1000)));
+            }
+            for (let i in g.planesOrdered) {
+                let hex = g.planesOrdered[i].icao;
+                g.historyKeep[hex] = 1;
+            }
+        }
 
         // Process history
         let data;
         let h = 0;
-        let pruneInt = Math.floor(PositionHistoryBuffer.length/5);
-        let currentTime = new Date().getTime()/1000;
+        let pruneInt = 100;
+        let lastTimestamp = 0;
+        let counter = 0;
+
         while (data = PositionHistoryBuffer.pop()) {
+            counter++;
+
+            if (data.now < lastTimestamp) {
+                console.log('parseHistory sorting issue');
+            }
+
+            if (lastTimestamp && data.now - lastTimestamp > 15) {
+                console.log("History " + String(counter).padStart(4) + " from: "
+                    + localTime(new Date(data.now * 1000)) + " GAP: " + localTime(new Date(lastTimestamp * 1000)));
+            }
+
+            lastTimestamp = data.now;
 
             if (pTracks && currentTime - data.now > pTracks * 3600) {
+                continue;
+            }
+
+            if (g.refreshHistory && now > data.now) {
                 continue;
             }
 
@@ -1793,23 +1885,20 @@ function parseHistory() {
                 processReceiverUpdate(data, true);
             }
 
-            if (h==1) {
-                console.log("Applied history " + h + " from: "
-                    + (new Date(now * 1000)).toLocaleTimeString());
-            }
-
-            // prune aircraft list
-            if (h++ % pruneInt == pruneInt - 1) {
-
-                console.log("Applied history " + h + " from: "
-                    + (new Date(now * 1000)).toLocaleTimeString());
-
-                reaper();
+            ++h;
+            if (h == 1 || h % pruneInt == 0 || PositionHistoryBuffer.length == 0) {
+                console.log("Apply History " + String(counter).padStart(4) + " from: "
+                    + localTime(new Date(data.now * 1000)));
             }
         }
 
+        // only restrict aircraft process to this list while parsing history
+        g.historyKeep = null;
+
+        reaper();
+
         // Final pass to update all planes to their latest state
-        console.log("Final history cleanup pass");
+        //console.log("Final history cleanup pass");
         for (let i in g.planesOrdered) {
             let plane = g.planesOrdered[i];
 
@@ -1820,35 +1909,46 @@ function parseHistory() {
                 plane.last_message_time -= 999;
             }
         }
-
         refreshFeatures();
         TAR.planeMan.refresh();
     }
 
-    PositionHistoryBuffer = null;
-
     console.timeEnd("Loaded aircraft tracks from History");
+
+    if (g.refreshHistory) {
+        g.refreshHistory = false;
+        noLongerHidden();
+        return;
+    }
 
     historyLoaded.resolve();
 }
 
 let replay_was_active = false;
+
+
 let timers = {};
 let timersActive = false;
 function clearIntervalTimers(arg) {
-    timersActive = false;
+    if (!timersActive) {
+        console.trace();
+        return;
+    }
 
     if (loadFinished && arg != 'silent') {
+        console.log(localTime(new Date()) + ' clear timers');
         jQuery("#timers_paused_detail").text('Timers paused (tab hidden).');
         jQuery("#timers_paused").css('display','block');
-
     }
-    console.log("clear timers " + localTime(new Date()));
     const entries = Object.entries(timers);
     for (let i in entries) {
         clearInterval(entries[i][1]);
     }
 
+    timersActive = false;
+
+    // in case the visibility changed while this was running
+    handleVisibilityChange();
 }
 
 function setIntervalTimers() {
@@ -1856,12 +1956,10 @@ function setIntervalTimers() {
         return;
     }
 
-    timersActive = true;
-
     if (loadFinished) {
         jQuery("#timers_paused").css('display','none');
     }
-    console.log("set timers " + localTime(new Date()));
+    console.log(localTime(new Date()) + " set timers ");
     if ((adsbfi || dynGlobeRate) && !uuid) {
         timers.globeRateUpdate = setInterval(globeRateUpdate, 180000);
     }
@@ -1883,9 +1981,31 @@ function setIntervalTimers() {
         fetchPfData();
     }
     if (receiverJson && receiverJson.outlineJson) {
-        timers.drawOutline = window.setInterval(drawOutlineJson, 15000);
+        timers.drawOutline = window.setInterval(drawOutlineJson, actualOutline.refresh);
         drawOutlineJson();
     }
+
+    if (aiscatcher_server) {
+        function updateAIScatcher() {
+            let req = jQuery.ajax({
+                url: aiscatcher_server + '/geojson',
+                dataType: 'text',
+            });
+
+            req.done(function(data) {
+                //console.log(data);
+                g.aiscatcher_source.setUrl("data:text/plain;base64,"+btoa(data));
+                g.aiscatcher_source.refresh();
+            });
+        }
+        timers.aiscatcher = setInterval(updateAIScatcher, aiscatcher_refresh * 1000);
+        updateAIScatcher();
+    }
+
+    timersActive = true;
+    fetchData();
+    // in case the visibility changed while this was running
+    handleVisibilityChange();
 }
 
 let djson;
@@ -1893,8 +2013,6 @@ let dstring;
 let dresult;
 
 function startPage() {
-
-    console.log("Completing init");
 
     if (!globeIndex) {
         jQuery("#lastLeg_cb").parent().hide();
@@ -1939,17 +2057,10 @@ function startPage() {
 
     loadFinished = true;
 
-    // Kick off first refresh.
-    fetchData();
-
-    clearIntervalTimers();
     setIntervalTimers();
 
     if (tempTrails)
         selectAllPlanes();
-
-    if (!heatmap)
-        jQuery("#loader").hide();
 
     if (replay) {
         showReplayBar();
@@ -1966,13 +2077,14 @@ function startPage() {
         setTimeout(TAR.planeMan.refresh, 10000);
 
     window.addEventListener("beforeunload", function (event) {
-        //jQuery("#map_canvas").hide();
-        clearIntervalTimers('silent');
+        clearIntervalTimers();
     });
 
     if (heatmap || replay || showTrace || pTracks || inhibitFetch) {
         afterFirstFetch();
     }
+
+    console.timeEnd("Page Load");
 }
 
 //
@@ -2056,7 +2168,7 @@ function webglAddLayer() {
             glStyle = {
                 'circle-radius': heatmap.radius * globalScale * 1.25,
                 'circle-displacement': [0, 0],
-                'circle-opacity': heatmap.alpha || 1,
+                'circle-opacity': heatmap.alpha || webglIconOpacity,
                 'circle-fill-color' : [
                     'color',
                     [ 'get', 'r' ],
@@ -2077,16 +2189,26 @@ function webglAddLayer() {
             style: glStyle,
             renderBuffer: renderBuffer,
         });
-        if (!webglLayer || !webglLayer.getRenderer())
+        if (!webglLayer)
             return false;
+        if (loStore['webglTested'] != 'true' && !webglLayer.getRenderer()) {
+            return false;
+        }
 
         layers.push(webglLayer);
 
         webgl = true;
-        plane.visible = true;
-        plane.updateMarker();
-        OLMap.renderSync();
 
+        // only test webgl once in every browser
+        // after that assume that it's working
+
+        if (loStore['webglTested'] != 'true') {
+            plane.visible = true;
+            plane.updateMarker();
+            OLMap.renderSync();
+        }
+
+        loStore['webglTested'] = 'true';
         success = true;
     } catch (error) {
         try {
@@ -2250,12 +2372,18 @@ function ol_map_init() {
     }));
 
     OLMap.on('movestart', function(event) {
-        webgl && TrackedAircraftPositions > 2000 && webglLayer.setOpacity(0.25);
+        if (webgl) {
+            if (TrackedAircraftPositions > webglIconMapMoveOpacityCrowdedThreshold) {
+                webglLayer.setOpacity(webglIconMapMoveOpacityCrowded)
+            } else {
+                webglLayer.setOpacity(webglIconMapMoveOpacity)
+            }
+        }
     });
 
     OLMap.on('moveend', function(event) {
         checkMovement();
-        webgl && webglLayer.setOpacity(1);
+        webgl && webglLayer.setOpacity(webglIconOpacity );
     });
 
     OLMap.on(['click', 'dblclick'], function(evt) {
@@ -2332,9 +2460,7 @@ function ol_map_init() {
     });
 
     // show the hover box
-    if (!globeIndex && zoomLvl > 5.5 && enableMouseover) {
-        OLMap.on('pointermove', onPointermove);
-    }
+    checkPointermove();
 }
 
 // Initalizes the map and starts up our timers to call various functions
@@ -2403,9 +2529,14 @@ function initMap() {
     });
 
 
-    if (receiverJson && receiverJson.outlineJson) {
-        actualOutlineFeatures = new ol.source.Vector();
-        actualOutlineStyle = new ol.style.Style({
+    actualOutline.enabled = multiOutline || (receiverJson && receiverJson.outlineJson);
+
+    if (actualOutline.enabled) {
+        actualOutline.refresh = 15000;
+        actualOutline.url = multiOutline ? 'data/multiOutline.json' : 'data/outline.json';
+
+        actualOutline.features = new ol.source.Vector();
+        actualOutline.style = new ol.style.Style({
             fill: null,
             stroke: new ol.style.Stroke({
                 color: actual_range_outline_color,
@@ -2413,17 +2544,17 @@ function initMap() {
                 lineDash: actual_range_outline_dash,
             }),
         });
-        actualOutlineLayer = new ol.layer.Vector({
+        actualOutline.layer = new ol.layer.Vector({
             name: 'actualRangeOutline',
             type: 'overlay',
             title: 'actual range outline',
-            source: actualOutlineFeatures,
+            source: actualOutline.features,
             zIndex: 101,
             renderBuffer: renderBuffer,
-            style: actualOutlineStyle,
+            style: actualOutline.style,
             visible: actual_range_show,
         });
-        layers.push(actualOutlineLayer);
+        layers.push(actualOutline.layer);
     }
     if (calcOutlineData) {
         calcOutlineLayer = new ol.layer.Vector({
@@ -2820,7 +2951,7 @@ function reaper(all) {
             continue;
         plane.seen = now - plane.last_message_time;
         if ( all || ((!plane.selected)
-            && plane.seen > 300
+            && plane.seen > reapTimeout
             && (plane.dataSource != 'adsc' || plane.seen > jaeroTimeout))
         ) {
             // Reap it.
@@ -3115,8 +3246,8 @@ function refreshSelected() {
     }
 
 
-    jQuery("#selected_altitude1").updateText(format_altitude_long(selected.altitude, selected.vert_rate, DisplayUnits));
-    jQuery("#selected_altitude2").updateText(format_altitude_long(selected.altitude, selected.vert_rate, DisplayUnits));
+    jQuery("#selected_altitude1").updateText(format_altitude_long(adjust_baro_alt(selected.altitude), selected.vert_rate, DisplayUnits));
+    jQuery("#selected_altitude2").updateText(format_altitude_long(adjust_baro_alt(selected.altitude), selected.vert_rate, DisplayUnits));
 
     jQuery('#selected_onground').updateText(format_onground(selected.altitude));
 
@@ -3245,13 +3376,6 @@ function refreshSelected() {
     }
 
     jQuery('#selected_country').updateText(selected.country.replace("special use", "special"));
-    if (ShowFlags && selected.flag_image !== null) {
-        jQuery('#selected_flag').removeClass('hidden');
-        jQuery('#selected_flag img').attr('src', FlagPath + selected.flag_image);
-        jQuery('#selected_flag img').attr('title', selected.country);
-    } else {
-        jQuery('#selected_flag').addClass('hidden');
-    }
 
     if (selected.position == null) {
         jQuery('#selected_position').updateText('n/a');
@@ -3454,7 +3578,7 @@ function refreshHighlighted() {
 
     jQuery('#highlighted_speed').text(format_speed_long(highlighted.gs, DisplayUnits));
 
-    jQuery("#highlighted_altitude").text(format_altitude_long(highlighted.altitude, highlighted.vert_rate, DisplayUnits));
+    jQuery("#highlighted_altitude").text(format_altitude_long(adjust_baro_alt(highlighted.altitude), highlighted.vert_rate, DisplayUnits));
 
     jQuery('#highlighted_pf_route').text((highlighted.pfRoute ? highlighted.pfRoute : highlighted.icao.toUpperCase()));
 
@@ -3477,12 +3601,13 @@ function mstime() {
 let nextCacheClear = mstime() + 300 * 1000;
 
 function releaseMem() {
-
-    if (mstime() > nextCacheClear) {
-        nextCacheClear = mstime() + 300 * 1000;
-        lineStyleCache = {};
-        iconCache = {};
+    if (!loadFinished || mstime() < nextCacheClear) {
+        return;
     }
+
+    nextCacheClear = mstime() + 300 * 1000;
+    lineStyleCache = {};
+    iconCache = {};
 
     //console.trace();
     //console.log('releaseMem()');
@@ -3549,8 +3674,8 @@ function refreshFeatures() {
         text: 'Flag',
         header: function() { return ""; },
         sort: function () { sortBy('country', compareAlpha, function(x) { return x.country; }); },
-        value: function(plane) { return (plane.flag_image ? ('<img width="20" height="12" style="display: block;margin: auto;" src="' + FlagPath + plane.flag_image + '" title="' + plane.country + '"></img>') : ''); },
-        hStyle: 'style="width: 20px; padding: 3px;"',
+        value: function(plane) { return (plane.country_code ? ('<img width="18" height="12" style="display: block;margin: auto;" src="flags/3x2/' + plane.country_code.toUpperCase() + '.svg" title="' + plane.country + '"></img>') : ''); },
+        hStyle: 'style="width: 18px; padding: 3px;"',
         html: true,
     };
     cols.flight = {
@@ -3587,7 +3712,7 @@ function refreshFeatures() {
     cols.altitude = {
         text: 'Altitude',
         sort: function () { sortBy('altitude',compareNumeric, function(x) { return (x.altitude == "ground" ? -100000 : x.altitude); }); },
-        value: function(plane) { return format_altitude_brief(plane.altitude, plane.vert_rate, DisplayUnits); },
+        value: function(plane) { return format_altitude_brief(adjust_baro_alt(plane.altitude), plane.vert_rate, DisplayUnits); },
         align: 'right',
         header: function () { return 'Alt.' + NBSP + '(' + get_unit_label("altitude", DisplayUnits) + ')';},
     };
@@ -5451,17 +5576,32 @@ function onPointermove(evt) {
 }
 
 function highlight(evt) {
-    const hex = evt.map.forEachFeatureAtPixel(evt.pixel,
+    const feature = evt.map.forEachFeatureAtPixel(evt.pixel,
         function(feature, layer) {
-            return feature.hex;
+            return feature;
         },
         {
             layerFilter: function(layer) {
-                return (layer == iconLayer || layer == webglLayer);
+                return (layer == iconLayer || layer == webglLayer || layer == g.aiscatcherLayer);
             },
             hitTolerance: 5 * globalScale,
         }
     );
+    if (!feature) {
+        HighlightedPlane = null;
+        refreshHighlighted();
+        return;
+    }
+    const hex = feature.hex;
+
+    const values = feature.values_;
+    const mmsi = values ? values.mmsi : null;
+    if (hex) {
+        //console.log(hex);
+    }
+    if (mmsi) {
+        //console.log(mmsi);
+    }
 
     if (HighlightedPlane && hex == HighlightedPlane.icao)
         return;
@@ -6609,40 +6749,40 @@ function drawUpintheair() {
         }
     }
 }
-let actualOutlineLayer;
-let actualOutlineFeatures;
-let actualOutlineStyle;
 
 function drawOutlineJson() {
-    if (!receiverJson || !receiverJson.outlineJson)
-        return;
-    let request = jQuery.ajax({ url: 'data/outline.json',
+    let request = jQuery.ajax({ url: actualOutline.url,
         cache: false,
+        timeout: actualOutline.refresh,
         dataType: 'json' });
     request.done(function(data) {
-        actualOutlineFeatures.clear();
-        let points;
-        if (data.actualRange && data.actualRange.last24h) {
-            points = data.actualRange.last24h.points;
+        actualOutline.features.clear();
+        let points = [];
+        if (data.multiRange) {
+            points = data.multiRange
+        } else if (data.actualRange && data.actualRange.last24h) {
+            points[0] = data.actualRange.last24h.points;
         } else {
-            points = data.points;
+            points[0] = data.points;
         }
-        if (!points || !points.length)
+        if (!points[0] || !points[0].length)
             return;
-        let geom = null;
-        let lastLon = null;
-        for (let j = 0; j < points.length + 1; ++j) {
-            const k = j % points.length;
-            const lat = points[k][0];
-            const lon = points[k][1];
-            const proj = ol.proj.fromLonLat([lon, lat]);
-            if (!geom || (lastLon && Math.abs(lon - lastLon) > 270)) {
-                geom = new ol.geom.LineString([proj]);
-                actualOutlineFeatures.addFeature(new ol.Feature(geom));
-            } else {
-                geom.appendCoordinate(proj);
+        for (let p = 0; p < points.length; ++p) {
+            let geom = null;
+            let lastLon = null;
+            for (let j = 0; j < points[p].length + 1; ++j) {
+                const k = j % points[p].length;
+                const lat = points[p][k][0];
+                const lon = points[p][k][1];
+                const proj = ol.proj.fromLonLat([lon, lat]);
+                if (!geom || (lastLon && Math.abs(lon - lastLon) > 270)) {
+                    geom = new ol.geom.LineString([proj]);
+                    actualOutline.features.addFeature(new ol.Feature(geom));
+                } else {
+                    geom.appendCoordinate(proj);
+                }
+                lastLon = lon;
             }
-            lastLon = lon;
         }
     });
 
@@ -7008,6 +7148,7 @@ function drawHeatmap() {
             }
 
             let points = myPoints[k];
+            let pointsU = new Uint32Array(points.buffer);
 
             let i = 4 * indexes[k][offsets[k]];
 
@@ -7048,6 +7189,33 @@ function drawHeatmap() {
 
                 if (PlaneFilter.enabled && altFiltered(alt))
                     continue;
+
+                if (heatmap.filters) {
+                    let type = (pointsU[i] >> 27) & 0x1F;
+                    let dataSource;
+                    switch (type) {
+                        case  0: dataSource = 'adsb';     break;
+                        case  1: dataSource = 'modeS';    break;
+                        case  2: dataSource = 'adsr';     break;
+                        case  3: dataSource = 'tisb';     break;
+                        case  4: dataSource = 'adsc';     break;
+                        case  5: dataSource = 'mlat';     break;
+                        case  6: dataSource = 'other';    break;
+                        case  7: dataSource = 'modeS';    break;
+                        case  8: dataSource = 'adsb';     break;
+                        case  9: dataSource = 'adsr';     break;
+                        case 10: dataSource = 'tisb';     break;
+                        case 11: dataSource = 'tisb';     break;
+                        default: dataSource = 'unknown';
+                    }
+                    let hex = (pointsU[i] & 0xFFFFFF).toString(16).padStart(6, '0');
+                    hex = (pointsU[i] & 0x1000000) ? ('~' + hex) : hex;
+                    let plane = g.planes[hex] || new PlaneObject(hex);
+                    plane.dataSource = dataSource;
+                    if (plane.isFiltered()) {
+                        continue;
+                    }
+                }
 
                 pointCount++;
                 //console.log(pos);
@@ -7110,7 +7278,7 @@ function drawHeatmap() {
         }
     }
     console.timeEnd("drawHeat");
-    jQuery("#loader").addClass("hidden");
+    jQuery("#loader").hide();
 }
 
 function currentExtent(factor) {
@@ -7756,7 +7924,7 @@ function showReplayBar(){
 };
 
 function timeoutFetch() {
-    console.log('timeoutFetch');
+    console.log("timeoutFetch " + localTime(new Date()));
     fetchData();
     if (timers.timeoutFetch) {
         clearTimeout(timers.checkMove);
@@ -7767,6 +7935,62 @@ function timeoutFetch() {
     }
 }
 
+function refreshHistory() {
+    if (0 && (new Date().getTime() - g.hideStamp) / 1000 < 2) {
+        console.log('short tab change, not loading history');
+        noLongerHidden();
+        return;
+    }
+    if (heatmap || replay || globeIndex || pTracks) {
+        noLongerHidden();
+        return;
+    }
+
+    jQuery("#loader_progress").attr('value', 0);
+
+    setTimeout(() => {
+        if (!timersActive) {
+            jQuery("#loader").show();
+        }
+    }, 200);
+
+    chunksDefer().done(function(data) {
+        console.log(localTime(new Date()) + ' tab change, loading history');
+        g.refreshHistory = true;
+        HistoryChunks = true;
+        chunkNames = [];
+        jQuery("#loader_progress").attr('value', 1);
+        try {
+            for (let i = data.chunks.length-1; i >= 0; i--) {
+                let f = data.chunks[i];
+                chunkNames.push(f);
+
+                // break after we found a chunk that's older than now
+                // chunk timestamp is the start of its data, not the end
+                // so we need to include the first chunk that's older
+                // which is done above
+
+                let parts = f.split(".")[0].split("_");
+                if (parts[0] == "chunk") {
+                    if (now > parts[1]/1e3) {
+                        break;
+                    }
+                }
+            }
+            //console.log(chunkNames);
+            nHistoryItems = chunkNames.length;
+            get_history();
+            push_history();
+        } catch (e) {
+            console.error(e);
+            noLongerHidden();
+        }
+    }).fail(function() {
+        noLongerHidden();
+    });
+}
+
+
 function handleVisibilityChange() {
     const prevHidden = tabHidden;
     if (document[hideName])
@@ -7774,10 +7998,11 @@ function handleVisibilityChange() {
     else
         tabHidden = false;
 
-    if (tabHidden && !prevHidden) {
+    if (tabHidden && timersActive) {
+        g.hideStamp = new Date().getTime();
         clearIntervalTimers();
         if (!globeIndex) {
-            timeoutFetch();
+            //timeoutFetch();
         }
 
         replay_was_active = replay.playing;
@@ -7787,24 +8012,21 @@ function handleVisibilityChange() {
     }
 
     // tab is no longer hidden
-    if (!tabHidden && prevHidden) {
+    if (!tabHidden && !timersActive) {
         if (loadFinished) {
             jQuery("#timers_paused").css('display','none');
         }
-        globeRateUpdate().done(noLongerHidden);
-
+        globeRateUpdate().done(refreshHistory);
     }
 }
 
 function noLongerHidden() {
-
-    clearIntervalTimers();
+    active();
     setIntervalTimers();
 
-    active();
+    jQuery("#loader").hide();
 
     refresh();
-    fetchData();
 
     if (replay_was_active) {
         playReplay(true);
@@ -7876,9 +8098,11 @@ function autoSelectClosest() {
     checkMovement();
     for (let key in g.planesOrdered) {
         const plane = g.planesOrdered[key];
+        if (!plane.visible)
+            continue;
         if (!closest)
             closest = plane;
-        if (plane.position == null || !plane.visible)
+        if (plane.position == null)
             continue;
         let refLoc = [CenterLon, CenterLat];
         if (autoselectCoords && autoselectCoords.length == 2) {
@@ -8390,6 +8614,46 @@ Please add a disclaimer to any screenshots of this website or better yet just re
 
 function getn(n) {
     limitUpdates=n; RefreshInterval=0; fetchCalls=0;
+}
+
+function onAltimeterSetStandard(e) {
+    e.preventDefault();
+    jQuery("#altimeter_input").val(1013.25);
+    onAltimeterChange(e);
+}
+function onAltimeterChange(e) {
+    e.preventDefault();
+    jQuery("#altimeter_input").blur();
+    let altimeter = parseFloat(jQuery("#altimeter_input").val().trim());
+
+    if (altimeter < 100) {
+        // assume inHg, convert to mbar
+        baroCorrectQNH = 33.8639 * altimeter;
+    } else {
+        // assume mbar / hPa
+        baroCorrectQNH = altimeter;
+    }
+
+    remakeTrails();
+    refreshSelected();
+    refreshFeatures();
+    TAR.planeMan.redraw();
+    refresh();
+}
+
+// Using formula from: https://www.weather.gov/media/epz/wxcalc/pressureAltitude.pdf
+// See also: https://en.wikipedia.org/wiki/Pressure_altitude
+// Inverse equation on wikipedia seems imprecise,
+// used the the weather.gov pdf and inverted the equation myself
+// This uses ISA atmosphere (should be the same as altimeters in planes)
+function adjust_baro_alt(alt) {
+    if (!baroUseQNH || alt == null || alt == "ground") {
+        return alt;
+    }
+    let station_pressure = Math.pow(1 - alt / 145366.45, 5.2553026) * 1013.25;
+
+    let res = ( 1 - Math.pow(station_pressure / baroCorrectQNH, 0.190284) ) * 145366.45;
+    return res;
 }
 
 function globeRateUpdate() {

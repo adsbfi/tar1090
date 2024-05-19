@@ -91,8 +91,26 @@
 // mapDimPercentage = 0.45;
 // mapContrastPercentage = 0;
 
+// opacities for various overlays
+// nexradOpacity = 0.35
+// dwdRadolanOpacity = 0.30;
+// rainViewerRadarOpacity = 0.30;
+// rainViewerCloudsOpacity = 0.30;
+// noaaInfraredOpacity = 0.35;
+// noaaRadarOpacity = 0.35;
+// openAIPOpacity = 0.70;
+// tfrOpacity = 0.70;
 
 // -- Marker settings -------------------------------------
+// (marker == aircraft icon)
+
+// aircraft icon opacity (normal and while the user is moving the map)
+// webglIconOpacity = 1.0;
+// webglIconMapMoveOpacity = 1.0;
+
+// if more than by default 2000 aircraft are on the screen, reduce icon opacity when moving the screen:
+// webglIconMapMoveOpacityCrowded = 0.25;
+// webglIconMapMoveOpacityCrowdedThreshold = 2000;
 
 // different marker size depending on zoom lvl
 // markerZoomDivide = 8.5;
@@ -312,6 +330,7 @@ HideCols = [
 
 // labelsGeom = false; // labels: uses geometric altitude (WGS84 ellipsoid unless geomUseEGM is enabled
 // geomUseEGM = false; // use EGM96 for displaying geometric altitudes (extra load time!)
+// baroUseQNH = false;
 
 // windLabelsSlim = false;
 // showLabelUnits = true;
@@ -340,6 +359,10 @@ HideCols = [
 //seenTimeoutMlat = 58; // in seconds
 
 //tableInView = false; // only show aircraft in current view (V button)
+
+
+// aiscatcher_server = "http://192.168.1.113:8100"; // update with your server address
+// aiscatcher_refresh = 15; // refresh interval in seconds
 
 /*
 tableColors = {
