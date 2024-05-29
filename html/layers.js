@@ -660,7 +660,7 @@ function createBaseLayers() {
         g.refreshRainviewerRadar = async function() {
             const latestLayer = await g.getRainviewerLayers('radar');
             const rainviewerRadarSource = new ol.source.XYZ({
-                url: 'https://tilecache.rainviewer.com/v2/radar/' + latestLayer.past[latestLayer.past.length - 1].time + '/512/{z}/{x}/{y}/4/1_1.png',
+                url: 'https://tilecache.rainviewer.com/v2/radar/' + latestLayer.past[latestLayer.past.length - 1].time + '/512/{z}/{x}/{y}/4/0_1.png',
                 attributions: '<a href="https://www.rainviewer.com/api.html" target="_blank">RainViewer.com</a>',
                 attributionsCollapsible: false,
                 maxZoom: 20,
