@@ -776,10 +776,6 @@
             <div class="settingsOptionContainer">
               <button class="formButton" onclick="resetSettings();">Reset All Settings</button>
             </div>
-            <div class="settingsOptionContainer">
-              <div class="settingsCheckbox" id="grouptype_checkbox"></div>
-              <div class="settingsText">Group by Data Type</div>
-            </div>
           </div>
         </div>
         <div style="display: none" id="credits">
@@ -830,11 +826,12 @@
         <div id="replayBar">
           <button id="replayPlay" >Play</button>
           <p id="replayDateHint" >Date:</p>
+          <p id="replayDateHintLocal" ></p>
           <input type="text" class="datepicker" id="replayDatepicker" >
           <p id="replayTimeHint"  >Time:</p>
           <p id="hourSelect"></p>
           <p id="minuteSelect"></p>
-          <p id="replayTimeZone">UTC</p>
+          <p id="replayTimeZone">UTC Date:</p>
           <p id="replaySpeedHint">Speed:</p>
           <p id="replaySpeedSelect"></p>
           <p id="replayLoading"></p>
@@ -862,6 +859,7 @@
                   <div>
                     <span class="largeText">adsb.fi</span>
                   </div>
+                  <div class="rSpacer"></div>
                   <div class="rSpacer"></div>
                   <div class="rSpacer"></div>
                   <div>
@@ -895,6 +893,11 @@
 
               <tr class="rSpacer">
                 <td></td>
+              </tr>
+              <tr id="mp3player" class="hidden">
+                <td style="text-align: center">
+                  <audio id="mp3player_audio" crossorigin="anonymous" preload="none" src="place_holder" type="audio/mp3" controls="controls" autoplay="false"></audio>
+                </td>
               </tr>
               <tr>
                 <td>
@@ -1070,7 +1073,9 @@
     <script src="libs/jquery-ui-1.13.2.min.js"></script>
     <script src="libs/jquery.ui.touch-punch-1.0.8.js"></script>
     <script src="libs/zstddec-tar1090-0.0.5.js"></script>
-    <script src="libs/ol-custom024.js"></script>
+
+    <!-- ol-custom bundling created using https://github.com/wiedehopf/ol-rollup-->
+    <script src="libs/ol-custom-10.4.0.js"></script>
 
     <!-- JS_ANCHOR2 -->
     <script src="early.js"></script>
