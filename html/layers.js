@@ -113,6 +113,33 @@ function createBaseLayers() {
             name: 'osm_de',
             title: 'OpenStreetMap DE',
             type: 'base',
+            name: 'OpenFreeMapLiberty',
+            title: 'OpenFreeMap Liberty',
+            declutter: true,
+            onVisible: (layer) => {
+                if (!layer.get('styleApplied')) {
+                    // ol-mapbox-style plugin packed in with ol ... (kinda ugly)
+                    ol.mapboxStyle.applyStyle(layer, "https://tiles.openfreemap.org/styles/liberty");
+                    ol.mapboxStyle.applyBackground(layer, "https://tiles.openfreemap.org/styles/liberty");
+                    layer.set('styleApplied', true);
+                }
+            },
+        }));
+    }
+    if (1) {
+        world.push(new ol.layer.VectorTile({
+            type: 'base',
+            name: 'OpenFreeMapPositron',
+            title: 'OpenFreeMap Positron',
+            declutter: true,
+            onVisible: (layer) => {
+                if (!layer.get('styleApplied')) {
+                    // ol-mapbox-style plugin packed in with ol ... (kinda ugly)
+                    ol.mapboxStyle.applyStyle(layer, "https://tiles.openfreemap.org/styles/positron");
+                    ol.mapboxStyle.applyBackground(layer, "https://tiles.openfreemap.org/styles/positron");
+                    layer.set('styleApplied', true);
+                }
+            },
         }));
     }
 
@@ -228,7 +255,7 @@ function createBaseLayers() {
     if (0) {
         let vtlayer = new ol.layer.VectorTile({
             source: new ol.source.VectorTile({
-                url: "http://test02.dev.adsbexchange.com/tiles/{z}/{x}/{y}.pbf",
+                url: "http://test02.dev.adsf.com/tiles/{z}/{x}/{y}.pbf",
                 format: new ol.format.MVT(),
                 maxZoom: 9,
                 transition: tileTransition,
@@ -335,6 +362,48 @@ function createBaseLayers() {
         }));
     }
 
+    if (loStore['mapboxKey'] != undefined)
+        MapboxAPIKey = loStore['mapboxKey'];
+
+    if (MapboxAPIKey) {
+        world.push(new ol.MapboxVectorLayer({
+            styleUrl: 'mapbox://styles/mapbox/streets-v10',
+            accessToken: MapboxAPIKey,
+            properties: {
+                name: 'mapbox_streets',
+                title: 'Mapbox Streets',
+                type: 'base',
+            },
+        }));
+        world.push(new ol.MapboxVectorLayer({
+            styleUrl: 'mapbox://styles/mapbox/light-v11',
+            accessToken: MapboxAPIKey,
+            properties: {
+                name: 'mapbox_light',
+                title: 'Mapbox Light',
+                type: 'base',
+            },
+        }));
+        world.push(new ol.MapboxVectorLayer({
+            styleUrl: 'mapbox://styles/mapbox/dark-v11',
+            accessToken: MapboxAPIKey,
+            properties: {
+                name: 'mapbox_dark',
+                title: 'Mapbox Dark',
+                type: 'base',
+            },
+        }));
+        world.push(new ol.MapboxVectorLayer({
+            styleUrl: 'mapbox://styles/mapbox/outdoors-v10',
+            accessToken: MapboxAPIKey,
+            properties: {
+                name: 'mapbox_outdoors',
+                title: 'Mapbox Outdoors',
+                type: 'base',
+            },
+        }));
+    }
+
     if (1) {
         us.push(new ol.layer.Tile({
             source: new ol.source.XYZ({
@@ -374,7 +443,7 @@ function createBaseLayers() {
                 transition: tileTransition,
             }),
             name: 'IFR_AreaLow',
-            title: 'IRF Enroute Chart Low',
+            title: 'IFR Enroute Chart Low',
             type: 'base'
         }));
 
@@ -388,7 +457,7 @@ function createBaseLayers() {
                 transition: tileTransition,
             }),
             name: 'IFR_High',
-            title: 'IRF Enroute Chart High',
+            title: 'IFR Enroute Chart High',
             type: 'base'
         }));
     }
@@ -521,7 +590,9 @@ function createBaseLayers() {
             opacity: nexradOpacity,
             visible: false,
             zIndex: 99,
-            extent: naExtent,
+            //extent: naExtent,
+            // this somehow seems to cause webgl errors.
+            // workaround by just not using this, it's not important
         });
 
         let refreshNexrad = function() {
@@ -629,7 +700,8 @@ function createBaseLayers() {
             opacity: dwdRadolanOpacity,
             visible: false,
             zIndex: 99,
-            extent: dwdExtent,
+            //extent: dwdExtent,
+            // extent somehow bugged
         });
 
 

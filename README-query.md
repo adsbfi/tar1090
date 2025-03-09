@@ -13,18 +13,20 @@
 - icao=icao - selects and isolates the selected plane(s). Separate multiple with commas.
 - noIsolation - show other planes and not only the ones selected by ?icao
 - icaoFilter=hex1,hex2,hex3 - Only show the mentioned hex IDs, no other aircraft will ever be displayed
+- icaoBlacklist=hex1,hex2,hex3 - Never show the mentioned hex IDs
 - reg=registration - Direct link to specific aircraft registration(s). Separate multiple with commas. ?icao is preferred as this option takes longer to load.
 - filterAltMin=500 - filter minimum altitute to 500 ft
 - filterAltMax=5000 - filter maximum altitute to 5000 ft
-- filterCallSign=^(UAL|DAL) - filter callsign to United or Deleta
+- filterCallSign=^(UAL|DAL) - filter callsign to United or Delta. Take care to escape special characters ( %5E(UAL%7CDAL) in this case).
 - filterType=B738 - filter to aircraft type code B738 aka 737-800
 - filterDescription=L2J - filter aircraft by type description
-- filterIcao=^a - filter icao that start with a
-- filterSources=adsb,uat,adsr,mlat,tisb,modeS - filter palnes by source type.
+- filterIcao=^a - filter icao that start with a (escape with %5Ea).
+- filterSources=adsb,uat,adsr,mlat,tisb,modeS - filter planes by source type.
 - filterDbFlag=military,pia,ladd - filter planes by the db flags.
 - sortBy=column - (possible values: icao, flag, flight, registration, aircraft_type, squawk, altitude, speed, vert_rate, distance, track, msgs, seen, rssi, lat, lon, data_source, military, ws, wd
 - sortByReverse - reverse the sorting specified using sortBy
 
+There is a setting in the webinterface to update the URL according to used filters, this can be simpler than building the query string by hand.
 See the main readme for more examples on how to use the filters
 
 ## Troubleshooting
@@ -90,3 +92,11 @@ See the main readme for more examples on how to use the filters
 - realHeat - real heatmap instead of dots
 - heatBlur - parameter for realHeat
 - heatWeight - parameter for realHeat
+
+## showTrace (only available with readsb globe-history)
+
+- icao=71be20 - select a plane (multiple planes with comma works but is a bit glitchy)
+- showTrace=2024-07-04 - show the trace for a particular UTC date (can be selected via the history tab in the aircraft details)
+- startTime=08:31:30 - only show data after this UTC time
+- endTime=08:38:30 - only show data before this UTC time
+- timestamp=1720081992 - show aircraft details for a particular time as an UNIC epoch timestamp (needs to be within the showTrace date) (clicking on the trace will change this in the URL bar)

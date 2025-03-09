@@ -287,6 +287,12 @@ select {
     background-color: var(--ACCENT);
     color: #FFFFFF;
     cursor: pointer;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow:
+        0 -2px 2px -1px rgba(0, 0, 0, 0.5),
+        0 2px 2px -1px rgba(0, 0, 0, 0.7);
 }
 .aircraft_table_header td {
     font-size: smaller;
@@ -888,7 +894,7 @@ input{
   grid-template-areas:
     "timezone dateHint timeHint speedHint"
     "play datepicker hours speedSelect"
-    "loading . minutes ."
+    ". dateHintLocal minutes loading "
     ". . . .";
 }
 
@@ -919,6 +925,9 @@ input{
 }
 #replayTimeHint{
    grid-area: timeHint;
+}
+#replayDateHintLocal{
+  grid-area: dateHintLocal;
 }
 #replayDateHint{
   grid-area: dateHint;
