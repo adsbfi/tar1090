@@ -2784,7 +2784,7 @@ function initMap() {
     g.zoomLvl = Number(loStore['zoomLvl']) || DefaultZoomLvl;
     g.zoomLvlCache = g.zoomLvl;
 
-    if (globeIndex && aggregator) {
+    if (globeIndex && adsbfi) {
         jQuery('#dump1090_total_history_td').hide();
         jQuery('#dump1090_message_rate_td').hide();
     }
