@@ -113,6 +113,27 @@ function createBaseLayers() {
             name: 'osm_de',
             title: 'OpenStreetMap DE',
             type: 'base',
+        }));
+    }
+    if (1) {
+        world.push(new ol.layer.VectorTile({
+            type: 'base',
+            name: 'OpenFreeMapBright',
+            title: 'OpenFreeMap Bright',
+            declutter: true,
+            onVisible: (layer) => {
+                if (!layer.get('styleApplied')) {
+                    // ol-mapbox-style plugin packed in with ol ... (kinda ugly)
+                    ol.mapboxStyle.applyStyle(layer, "https://tiles.openfreemap.org/styles/bright");
+                    ol.mapboxStyle.applyBackground(layer, "https://tiles.openfreemap.org/styles/bright");
+                    layer.set('styleApplied', true);
+                }
+            },
+        }));
+    }
+    if (1) {
+        world.push(new ol.layer.VectorTile({
+            type: 'base',
             name: 'OpenFreeMapLiberty',
             title: 'OpenFreeMap Liberty',
             declutter: true,
@@ -140,60 +161,6 @@ function createBaseLayers() {
                     layer.set('styleApplied', true);
                 }
             },
-        }));
-    }
-
-    if (false && adsbfi) {
-        jQuery('#premium_text').updateText('Premium active!');
-        world.push(new ol.layer.Tile({
-            source: new ol.source.XYZ({
-                url: "https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=HyIQ6A88uTDdX4n4MNVY",
-                attributions: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
-                attributionsCollapsible: false,
-                maxZoom: 19,
-                transition: tileTransition,
-            }),
-            name: 'maptiler_sat',
-            title: 'Satellite (Premium)',
-            type: 'base',
-        }));
-        world.push(new ol.layer.Tile({
-            source: new ol.source.XYZ({
-                url: "https://api.maptiler.com/maps/hybrid/256/{z}/{x}/{y}.jpg?key=HyIQ6A88uTDdX4n4MNVY",
-                attributions: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
-                attributionsCollapsible: false,
-                maxZoom: 19,
-                transition: tileTransition,
-            }),
-            name: 'maptiler_hybrid',
-            title: 'Hybrid Sat. (Premium)',
-            type: 'base',
-        }));
-        world.push(new ol.layer.Tile({
-            source: new ol.source.XYZ({
-                url: "https://api.maptiler.com/maps/777ad15e-3e64-4edf-8e86-84ba16e50961/256/{z}/{x}/{y}.png?key=geutV4UHZB7QFdlzE3w4",
-                attributions: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
-                attributionsCollapsible: false,
-                maxZoom: 19,
-                transition: tileTransition,
-            }),
-            name: 'maptiler_custom',
-            title: 'ADSBx Custom (Premium)',
-            type: 'base',
-        }));
-    }
-    if (0 && adsbfi) {
-        world.push(new ol.layer.Tile({
-            source: new ol.source.XYZ({
-                url: "https://api.maptiler.com/maps/256/{z}/{x}/{y}.png?key=HyIQ6A88uTDdX4n4MNVY",
-                attributions: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
-                attributionsCollapsible: false,
-                maxZoom: 16,
-                transition: tileTransition,
-            }),
-            name: 'maptiler_english',
-            title: 'English MapTiler (testing)',
-            type: 'base',
         }));
     }
 
@@ -278,7 +245,6 @@ function createBaseLayers() {
         world.push(vtlayer);
     }
 
-    /* seems defunct
     world.push(new ol.layer.Tile({
         source: new ol.source.OSM({
             url: 'https://gibs-{a-c}.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg',
@@ -291,7 +257,6 @@ function createBaseLayers() {
         title: 'GIBS Relief',
         type: 'base',
     }));
-    */
 
     const date = new Date(Date.now() - 86400 * 1000);
     const yesterday = date.getUTCFullYear() + '-' + (date.getUTCMonth() + 1).toString().padStart(2, '0') + '-' + date.getUTCDate().toString().padStart(2, '0');
