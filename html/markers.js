@@ -1070,6 +1070,7 @@ let TypeDesignatorIcons = {
     'C2': ['c2', 1],
     'E2': ['c2', 1],
     'H47': ['chinook', 1],
+    'H46': ['chinook', 1],
     'HAWK': ['bae_hawk', 1],
 
     'GYRO': ['gyrocopter', 1],
@@ -1238,7 +1239,7 @@ function getBaseMarker(category, typeDesignator, typeDescription, wtc, addrtype,
     //return ['f5_tiger', 1];
 
     if (addrtype == 'ais') {
-        return ['ground_square', 0.7];
+        return ['ground_square', 0.001];
     }
 
     if (halloween) {
@@ -1251,7 +1252,7 @@ function getBaseMarker(category, typeDesignator, typeDescription, wtc, addrtype,
                 return ['witchl', 1];
         }
     }
-    if (uk_advisory) {
+    if (atcStyle) {
         return ['asterisk', 1.2];
     }
     if (squareMania) {

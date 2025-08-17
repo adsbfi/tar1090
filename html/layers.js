@@ -42,7 +42,7 @@ function createBaseLayers() {
         custom_layers.push(new ol.layer.Tile({
             source: new ol.source.OSM({
                 "url" : loStore['customTiles'],
-                maxZoom: 15,
+                maxZoom: 20,
                 transition: tileTransition,
             }),
             name: 'custom_tiles',
@@ -278,6 +278,7 @@ function createBaseLayers() {
         world.push(vtlayer);
     }
 
+    /* seems defunct
     world.push(new ol.layer.Tile({
         source: new ol.source.OSM({
             url: 'https://gibs-{a-c}.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg',
@@ -286,10 +287,11 @@ function createBaseLayers() {
             maxZoom: 8,
             transition: tileTransition,
         }),
-        name: 'gibs_reliev',
+        name: 'gibs_relief',
         title: 'GIBS Relief',
         type: 'base',
     }));
+    */
 
     const date = new Date(Date.now() - 86400 * 1000);
     const yesterday = date.getUTCFullYear() + '-' + (date.getUTCMonth() + 1).toString().padStart(2, '0') + '-' + date.getUTCDate().toString().padStart(2, '0');
@@ -512,28 +514,42 @@ function createBaseLayers() {
     }));
 
     if (true) {
-        us.push(new ol.layer.Vector({
-            source: new ol.source.Vector({
-                url: 'https://raw.githubusercontent.com/airframesio/data/master/json/faa/tfrs.geojson',
-                format: new ol.format.GeoJSON(),
-                attributions: 'TFRs courtesy of <a href="https://github.com/airframesio/data" target="_blank">Airframes</a>.'
-            }),
-            style: new ol.style.Style({
-                fill: new ol.style.Fill({
-                    color : [255, 0, 0, 0.6]
-                }),
-                stroke: new ol.style.Stroke({
-                    color: [255, 0, 0, 0.9],
-                    width: 1
-                }),
-            }),
+        let tfrLayer = new ol.layer.Vector({
+            style: {
+                'stroke-width': 2,
+                'stroke-color': 'red',
+                'fill-color': [255, 0, 0, 0.08],
+                'text-value': [
+                    'concat',
+                    ['get', 'NOTAM_KEY'],
+                    '\n',
+                    ['get', 'LEGAL']
+                ],
+                'text-font': '14px sans-serif',
+                'text-stroke-width': 2,
+                'text-stroke-color': 'black'
+            },
             name: 'tfrs',
             title: 'TFRs',
             type: 'overlay',
             opacity: tfrOpacity,
             visible: false,
             zIndex: 99,
-        }));
+        });
+
+        us.push(tfrLayer);
+
+        let refreshTFR = function() {
+            let source = new ol.source.Vector({
+                url: 'https://raw.githubusercontent.com/wiedehopf/tar1090-aux/master/tfrs.geojson',
+                format: new ol.format.GeoJSON(),
+                attributions: 'TFRs via FAA hosted on github: <a href="https://github.com/wiedehopf/tar1090-aux" target="_blank">tar1090-aux</a>.'
+            });
+            tfrLayer.setSource(source);
+        };
+
+        refreshTFR();
+        window.setInterval(refreshTFR, 5 * 60 * 1000);
     }
 
     us.push(new ol.layer.Vector({
@@ -687,7 +703,7 @@ function createBaseLayers() {
                 maxResolution: 156543.03392804097,
                 maxZoom: 8,
                 minZoom: 0,
-                tileSize: 256,
+                tileSize: 512,
             }),
             transition: tileTransition,
         });
@@ -704,12 +720,19 @@ function createBaseLayers() {
             // extent somehow bugged
         });
 
+        let dwdValidtime = "";
 
         let refreshDwd = function () {
-            dwd.getSource().updateParams({"validtime": (new Date()).getTime()});
+            let ms = Date.now();
+            let validtime = (ms - ms % (5 * 60 * 1000)) / 1000;
+            if (validtime != dwdValidtime) {
+                //console.log(`dwd validtime ${zuluTime(new Date(validtime * 1000))}`);
+                dwd.getSource().updateParams({validtime: validtime});
+                dwdValidtime = validtime;
+            }
         };
         refreshDwd();
-        window.setInterval(refreshDwd, 2 * 60 * 1000);
+        window.setInterval(refreshDwd, 15 * 1000);
 
         europe.push(dwd);
     }
@@ -846,7 +869,9 @@ function createBaseLayers() {
 
     if (uk_advisory) {
         europe.push(createGeoJsonLayer('uka_airports', 'uka_airports', 'geojson/uk_advisory/airports.geojson', 'rgba(255, 255, 255, 1)', 'rgba(255, 255, 255, 1)'));
-        europe.push(createGeoJsonLayer('uka_airspaces', 'uka_airspaces', 'geojson/uk_advisory/airspaces.geojson', 'rgba(0, 0, 0, 0.1)', 'rgba(0, 30, 255, 0.2)'));
+        europe.push(createGeoJsonLayer('uka_airspaces', 'uka_airspaces',
+            'https://raw.githubusercontent.com/wiedehopf/tar1090-aux/master/uk_advisory/airspaces.geojson',
+            'rgba(0, 0, 0, 0.1)', 'rgba(0, 30, 255, 0.2)'));
         //europe.push(createGeoJsonLayer('hotspots', 'hotspots', 'geojson/uk_advisory/hotspots.geojson', 'rgba(255, 255, 255, 1)', 'rgba(255, 255, 255, 1)'));
         //europe.push(createGeoJsonLayer('navaids', 'navaids', 'geojson/uk_advisory/navaids.geojson', 'rgba(0, 0, 0, 1)', 'rgba(0, 0, 0, 1)'));
         europe.push(createGeoJsonLayer('uka_runways', 'uka_runways', 'geojson/uk_advisory/runways.geojson', 'rgba(0, 0, 0, 0.5)', 'rgba(0, 0, 0, 0.5)'));

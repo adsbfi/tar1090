@@ -895,11 +895,9 @@
               <tr class="rSpacer">
                 <td></td>
               </tr>
-              <tr id="mp3player" class="hidden">
-                <td style="text-align: center">
-                  <audio id="mp3player_audio" crossorigin="anonymous" preload="none" src="place_holder" type="audio/mp3" controls="controls" autoplay="false"></audio>
-                </td>
-              </tr>
+              <tr><td>
+              <table style="width: 100%" id="mp3player" class="hidden"></table>
+              </td></tr>
               <tr>
                 <td>
                   <table style="width: 100%">
@@ -920,6 +918,7 @@
                           <span> <input id="altimeter_input" type="number" step="0.01" value="29.92" class="searchInput"></span>
                           <span> <button class="formButton" type="submit">Set</button></span>
                           <span> <button class="formButton" type="button" id="altimeter_set_standard">Standard</button>
+                          <span> <button class="formButton" type="button" disabled id="altimeter_set_selected">From Plane</button>
                         </form>
                       </td>
                     </tr>
@@ -1076,7 +1075,7 @@
     <script src="libs/zstddec-tar1090-0.0.5.js"></script>
 
     <!-- ol-custom bundling created using https://github.com/wiedehopf/ol-rollup-->
-    <script src="libs/ol-custom-10.4.0.js"></script>
+    <script src="libs/ol-custom-10.6.1.js"></script>
 
     <!-- JS_ANCHOR2 -->
     <script src="early.js"></script>
