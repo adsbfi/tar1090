@@ -8954,6 +8954,8 @@ function setSelectedIcao() {
 function mapTypeSettings() {
     if (MapType_tar1090.startsWith('maptiler_sat') || MapType_tar1090.startsWith('maptiler_hybrid')) {
         layerDimFactor = 0.25;
+    } else if (MapType_tar1090 == 'gibs_relief') {
+        layerDimFactor = 0.25;
     } else if (MapType_tar1090 == 'esri') {
         layerDimFactor = 0.5;
     } else if (MapType_tar1090 == 'gibs') {
