@@ -234,7 +234,7 @@ if (usp.has('feed')) {
     } else {
         console.error('uuid / feed fail!');
     }
-    const feedAsUuid = true; // treat /?feed as /?uuid
+    const feedAsUuid = false; // treat /?feed as /?uuid
     if (feedAsUuid) {
         filterUuid = uuid;
         uuid = null;
