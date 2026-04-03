@@ -79,6 +79,7 @@ let openAIPOpacity = 1.0;
 let tfrOpacity = 0.70;
 
 let offlineMapDetail = -1;
+let offlineMapDetailOFM = -1;
 
 // -- Marker settings -------------------------------------
 // (marker == aircraft icon)
@@ -352,6 +353,7 @@ let useIataAirportCodes = true; // DEPRECATED, forces routeDisplay to icao when 
 let routeDisplay = 'iata';
 // which routeApi service to use
 let routeApiUrl = "";
+let debugRoute = false; // bunch of debugging console output for route api
 
 // show a link to jetphotos, only works if planespottersAPI is disabled
 let jetphotoLinks = false;
@@ -467,3 +469,5 @@ let SiteLon     = null;
 // Default center of the map if no Site location is set
 let DefaultCenterLat = 40.56;
 let DefaultCenterLon = -73.66
+
+let MergeNonIcao = false; // set to true to merge non icao hex with the icao hex (remove the ~)

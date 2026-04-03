@@ -47,7 +47,7 @@ sudo bash -c "$(wget -nv -O - https://github.com/adsbfi/tar1090/raw/master/insta
 
 Configuration should be preserved.
 
-## Testing changes to tar1090
+## Developting / Testing changes to tar1090
 
 - Clone the github repo
 - Make changes
@@ -455,22 +455,6 @@ sudo cp /usr/local/share/tar1090/html/upintheair.json /usr/local/share/tar1090/h
 ```
 
 
-## history not loading issue (possible fix)
-
-For a day or so i had a bug in the install script turning symbolic links in /etc/lighttpd/conf-enabled into copies of the files they were pointing to.
-
-This can cause some other issues with my install script which fiddles with the lighttpd config files to make mod_setenv work.
-
-Anyhow if just rerunning the install script does not fix your history loading issue, you can try this:
-
-```
-cd /etc/lighttpd/conf-enabled
-for i in *; do if [ -f "../conf-available/$i" ]; then sudo ln -s -f "../conf-available/$i" $i; fi; done
-```
-
-After that rerun the install script.
-If you still have history loading issues, get back to me via the github issues or the various forums i frequent.
-
 ## readsb wiedehopf fork --heatmap feature:
 
 /var/globe_history needs to be a directory writeable by the user readsb.
@@ -497,6 +481,11 @@ Optional arguments that can be added to the URL:
 alternative display style: &realHeat
 - blurryness: &heatBlur=2
 - weight of each dot for the heatmap: &heatWeight=4
+
+## offline map
+
+<https://github.com/wiedehopf/openfreemap_offline>
+<https://github.com/wiedehopf/adsb-wiki/wiki/offline-map-tiles-tar1090>
 
 ## Uses this library for decompressing zstd
 
