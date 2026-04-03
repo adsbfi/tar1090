@@ -617,7 +617,7 @@ function fetchData(options) {
                 }
                 url = url.slice(0, -1); // remove trailing comma
             }
-            url += '&filter_uuid=' + filterUuid[i];
+            url += 'uuid/?feed=' + filterUuid[i];
             ac_url.push(url);
         }
     } else if (reApi) {
