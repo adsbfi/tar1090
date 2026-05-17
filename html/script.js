@@ -353,6 +353,7 @@ function fetchFail(jqxhr, status, error) {
         status = jqxhr.status;
         if (jqxhr.readyState == 0) error = "Can't connect to server, check your network!";
         let errText = status + (error ? (": " + error) : "");
+	if (status == 403) errText = "Refresh the page to continue";
         console.log(jqxhr);
         console.log(error);
         if (status != 429 && status != '429') {
