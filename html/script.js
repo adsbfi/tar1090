@@ -2820,7 +2820,7 @@ function initMap() {
     if ((globeIndex && adsbfi) || filterUuid) {
         jQuery('#dump1090_message_rate_td').hide();
     }
-    if ((globeIndex && aggregator) || (receiverJson && receiverJson.haveReplay)) {
+    if ((globeIndex && adsbfi) || (receiverJson && receiverJson.haveReplay)) {
         jQuery('#RP').show();
     }
 
