@@ -2315,7 +2315,6 @@ function startPage() {
 
     if (replay) {
         showReplayBar();
-        loadReplay(replay.ts);
     }
 
     if (heatmap) {
@@ -2822,6 +2821,9 @@ function initMap() {
     if ((globeIndex && adsbfi) || filterUuid) {
         jQuery('#dump1090_message_rate_td').hide();
     }
+    if ((globeIndex && adsbfi) || (receiverJson && receiverJson.haveReplay)) {
+        jQuery('#RP').show();
+    }
 
     locationDotLayer = new ol.layer.Vector({
         name: 'locationDot',
@@ -3151,6 +3153,9 @@ function initMap() {
             case "T":
                 filterTISB = !filterTISB;
                 refreshFilter();
+                break;
+            case "Y":
+                showReplayBar();
                 break;
             case "u":
                 toggleMilitary();
@@ -6514,7 +6519,7 @@ function updateAddressBar() {
     }
     //console.log(shareLink);
 
-    if (!string && !usp.has('showTrace') && !usp.has('icao')) {
+    if (!string && !usp.has('showTrace') && !usp.has('icao') && !usp.has('replay')) {
         string = initialURL;
     } else {
         string = pathName + string;
@@ -8291,10 +8296,12 @@ function showReplayBar(){
     showingReplayBar = !showingReplayBar;
     if (!showingReplayBar){
         jQuery("#replayBar").hide();
+        clearTimeout(refreshId);
         replay = null;
         jQuery('#map_canvas').height('100%');
         jQuery('#sidebar_canvas').height('100%');
         jQuery("#selected_showTrace_hide").show();
+        fetchData({force: true});
     } else {
         jQuery("#replayBar").show();
         jQuery("#replayBar").css('display', 'grid');
@@ -8303,7 +8310,6 @@ function showReplayBar(){
         jQuery('#sidebar_canvas').height('calc(100% - 110px)');
         if (!replay) {
             replay = replayDefaults(new Date());
-            replay.playing = false;
         }
         //ts.setUTCMinutes((parseInt((ts.getUTCMinutes() + 7.5)/15) * 15) % 60);
         let datepickerOptions = {
@@ -8369,7 +8375,11 @@ function showReplayBar(){
         jQuery('#replaySpeedHint').text('Speed: ' + replay.speed + 'x');
 
         jQuery("#selected_showTrace_hide").hide();
+
+        loadReplay(replay.ts);
     }
+
+    updateAddressBar();
 };
 
 function timeoutFetch() {
@@ -8581,11 +8591,20 @@ function setAutoselect() {
     autoSelectClosest();
 }
 function registrationLink(plane) {
-    if (plane.country === 'Brazil') {
-        return `https://sistemas.anac.gov.br/aeronaves/cons_rab_resposta_en.asp?textMarca=${plane.registration}`;
-    } else {
-        return '';
-    }
+    
+    const countryLinks = {
+        Brazil: (reg) => `https://sistemas.anac.gov.br/aeronaves/cons_rab_resposta_en.asp?textMarca=${reg}`,
+        Australia: (reg) => `https://www.casa.gov.au/search-centre/aircraft-register?reg=${reg.replace(/^VH-/, '')}`,
+        Jamaica: (reg) => `https://www.jcaa.gov.jm/aircraft-registry/${reg}`,
+        Montenegro: (reg) => `https://www.caa.me/en/registri?field_registarska_oznaka1_value=${reg}`,
+        Norway: (reg) => `https://www.luftfartstilsynet.no/aktorer/norges-luftfartoyregister/registrerte-luftfartoy/?mark=${reg}`,
+        Iceland: (reg) => `https://island.is/en/aircraft-registry?aq=${reg.replace(/^TF-/, '')}`,
+        "New Zealand": (reg) => `https://www.aviation.govt.nz/aircraft/aircraft-registration/aircraft-register-search/ShowDetails/${reg.replace(/^ZK-/, '')}`,
+        "United States": (reg) => `https://registry.faa.gov/AircraftInquiry/Search/NNumberResult?nNumberTxt=${reg.slice(1)}`
+    };
+
+    const generator = countryLinks[plane.country];
+    return generator ? generator(plane.registration) : '';
 }
 
 

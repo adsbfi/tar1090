@@ -277,12 +277,6 @@ const customTileType = usp.get('customTileType');
 if (customTileType)
   loStore['customTileType'] = customTileType;
 
-const bingKey = usp.get('BingMapsAPIKey');
-if (bingKey)
-    loStore['bingKey'] = bingKey;
-if (bingKey == 'remove')
-    loStore.removeItem('bingKey');
-
 if (usp.has('l3harris') || usp.has('ift')) {
     l3harris = true;
 }
