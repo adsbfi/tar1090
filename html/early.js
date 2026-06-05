@@ -867,12 +867,60 @@ if (!Object.entries) {
   };
 }
 
+class GoogleEarthWebKML extends ol.format.KML {
+    constructor(options) {
+        super(options);
+        this.base64Regex = /data:image\/(?:png|jpeg|webp|svg\+xml)(?:;charset=utf-8)?;base64,((?:[A-Za-z0-9_-]|[+/])+={0,2})/gim;
+    } 
+
+    getType() {
+        return "text";
+    }
+
+    readFeature(source, options) {
+        return super.readFeature(this.handleBadTags(source), options);
+    }
+
+    readFeatures(source, options) {
+        return super.readFeatures(this.handleBadTags(source), options);
+    }
+
+    handleBadTags(rawString) {
+        if (typeof rawString !== 'string') return rawString;
+        
+        let result = rawString;
+
+        // remove styleUrl tags that are direct descendants of cascadingStyle tags
+        result = result.replace(
+            /<.*?cascadingstyle.*?>\s*(<styleurl>.*<\/styleurl>)/gim,
+            (a, b) => { return a.slice(0, a.indexOf(b)); }
+        );
+
+        // convert cascadingStyle tags to style tags
+        result = result.replace(
+            /<.*?cascadingstyle.*?kml:id="(.+)">\s*<style>/gim,
+            (a, b) => { return `<Style id="${b}">`; }
+        );
+        result = result.replace(/<\/Style>\s*<\/.*?cascadingstyle>/gim, "</Style>");
+
+        // fix dataURIs
+        result = result.replace(this.base64Regex, (a, b) => {
+            const withPadding = b.length % 4 !== 0
+                ? (a += Array.from({ length: 4 - (b.length % 4) }, () => "=").join(""))
+                : a;
+            return withPadding.replaceAll("-", "+").replaceAll("_", "/");
+        });
+
+        return result;
+    }
+}
+
 let custom_layers = new ol.Collection();
 function add_kml_overlay(url, name, opacity) {
     custom_layers.push(new ol.layer.Vector({
         source: new ol.source.Vector({
             url: url,
-            format: new ol.format.KML(),
+            format: new GoogleEarthWebKML(),
         }),
         name: name,
         title: 'custom_' + name,
@@ -881,6 +929,57 @@ function add_kml_overlay(url, name, opacity) {
         visible: true,
         zIndex: 99,
     }));
+}
+
+if (usp.has('kml')) {
+    const kmlInput = document.createElement('input');
+    kmlInput.type = 'file';
+    kmlInput.accept = '.kml';
+    kmlInput.multiple = true;
+    kmlInput.style.display = 'none';
+    document.body.appendChild(kmlInput);
+
+    const kmlButton = document.createElement('button');
+    kmlButton.innerText = "Select KML files to load";
+    Object.assign(kmlButton.style, {
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+	transform: 'translate(-50%, -50%)',
+	boxShadow: 'calc( 4px * var(--SCALE)) calc( 4px * var(--SCALE)) calc( 10px * var(--SCALE)) #444444',
+        padding: 'calc( 20px * var(--SCALE))',
+        fontSize: 'calc( 15px * var(--SCALE))',
+	fontWeight: 'bold',
+        backgroundColor: 'var(--ACCENT)',
+        color: '#fff',
+	border: 'none',
+        borderRadius: 'calc( 2px * var(--SCALE))',
+        cursor: 'pointer',
+	zIndex: '9999'
+    });
+    document.body.appendChild(kmlButton);
+
+    kmlButton.addEventListener('click', function() {
+        kmlInput.click();
+    });
+
+    kmlInput.addEventListener('change', function(e) {
+        const files = e.target.files;
+
+        if (files && files.length > 0) {
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileUrl = URL.createObjectURL(file);
+                const layerName = file.name.replace(/\.[^/.]+$/, '');
+
+                add_kml_overlay(fileUrl, layerName, 1.0);
+                console.log('Custom KML layer loaded:', layerName);
+            }
+        }
+        
+        document.body.removeChild(kmlInput);
+        document.body.removeChild(kmlButton);
+    });
 }
 
 
